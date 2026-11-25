@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Minimal base for the auth screens (Tailwind preflight is disabled so the MAHI design stays untouched). */
+.auth-screen, .auth-screen * { box-sizing: border-box; }
+.auth-screen input { outline: none; }
+.auth-screen input:focus { box-shadow: 0 0 0 3px rgba(46, 158, 79, .35); border-color: #2E9E4F; }
+@keyframes mahi-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+.mahi-eye { transform-origin: center; transform-box: fill-box; animation: mahi-blink 4s infinite; }
+@keyframes mahi-float { 50% { transform: translateY(-4px); } }
+.mahi-float { animation: mahi-float 4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .mahi-eye, .mahi-float { animation: none; } }

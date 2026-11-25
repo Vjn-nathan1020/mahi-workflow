@@ -1,0 +1,9 @@
+{
+  "name": "MAHI – Personal Workflow AI Assistant",
+  "short_name": "MAHI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F3F6F4",
+  "theme_color": "#12263F",
+  "icons": [{ "src": "/mahi-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
