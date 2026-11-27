@@ -8,7 +8,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:sync": "node scripts/test-sync.mjs"
+    "test:sync": "node scripts/test-sync.mjs",
+    "test:persistence": "node scripts/test-persistence.mjs",
+    "test": "node scripts/test-persistence.mjs && node scripts/test-sync.mjs",
+    "test:cloud": "node scripts/test-cloud2.mjs",
+    "test:db": "node scripts/test-schema.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

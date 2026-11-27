@@ -7,7 +7,8 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const SCHEMA_VERSION = 1;
+  // Plan v2 (27 Nov 2026): Christmas Set 03 and Set 04 were removed; New Year and Pongal renumbered.
+  const SCHEMA_VERSION = 2;
 
   // ---- Brand master plan (per set) -------------------------------------------------
   const BRANDS = [
@@ -31,7 +32,7 @@
   const VJ_IDS = ['VJ 01', 'VJ 02', 'VJ 03'];
 
   const FESTIVALS = [
-    { name: 'Christmas', date: '2026-12-25', dateLabel: '25 December 2026', prodStart: '2026-11-27', prodEnd: '2026-12-23', sets: 4, colors: ['#C62828', '#1B5E20'] },
+    { name: 'Christmas', date: '2026-12-25', dateLabel: '25 December 2026', prodStart: '2026-11-27', prodEnd: '2026-12-10', sets: 2, colors: ['#C62828', '#1B5E20'] },
     { name: 'New Year', date: '2027-01-01', dateLabel: '1 January 2027', prodStart: '2026-12-28', prodEnd: '2026-12-30', sets: 1, colors: ['#1A3E8C', '#C9A227'] },
     { name: 'Pongal', date: '2027-01-14', dateEnd: '2027-01-17', dateLabel: '14–17 January 2027', prodStart: '2027-01-03', prodEnd: '2027-01-12', sets: 2, colors: ['#E0A800', '#2E7D32'] },
   ];
@@ -40,12 +41,83 @@
   const SETS = [
     { no: 1, code: 'S01', label: 'Set 01', festival: 'Christmas', start: '2026-11-27', end: '2026-12-03', compressed: false },
     { no: 2, code: 'S02', label: 'Set 02', festival: 'Christmas', start: '2026-12-04', end: '2026-12-10', compressed: false },
-    { no: 3, code: 'S03', label: 'Set 03', festival: 'Christmas', start: '2026-12-11', end: '2026-12-17', compressed: false },
-    { no: 4, code: 'S04', label: 'Set 04', festival: 'Christmas', start: '2026-12-18', end: '2026-12-23', compressed: false },
-    { no: 5, code: 'S05', label: 'Set 05', festival: 'New Year', start: '2026-12-28', end: '2026-12-30', compressed: true },
-    { no: 6, code: 'S06', label: 'Set 06', festival: 'Pongal', start: '2027-01-03', end: '2027-01-09', compressed: false },
-    { no: 7, code: 'S07', label: 'Set 07', festival: 'Pongal', start: '2027-01-10', end: '2027-01-12', compressed: true },
+    { no: 3, code: 'S03', label: 'Set 03', festival: 'New Year', start: '2026-12-28', end: '2026-12-30', compressed: true },
+    { no: 4, code: 'S04', label: 'Set 04', festival: 'Pongal', start: '2027-01-03', end: '2027-01-09', compressed: false },
+    { no: 5, code: 'S05', label: 'Set 05', festival: 'Pongal', start: '2027-01-10', end: '2027-01-12', compressed: true },
   ];
+
+  // ---- Upgrade saved data from plan v1 (7 sets) to plan v2 (5 sets) ----------------------
+  // v1 → v2 set codes. The removed Christmas sets become "OLD-S03" / "OLD-S04" so their IDs can
+  // never be mistaken for the new Set 03 / Set 04.
+  const SET_MAP_V1 = { S01: 'S01', S02: 'S02', S03: 'OLD-S03', S04: 'OLD-S04', S05: 'S03', S06: 'S04', S07: 'S05' };
+  const mapRef = (v) => (typeof v === 'string' ? v.replace(/(^|[^A-Za-z0-9-])S0([1-7])(?![0-9])/g, (m, pre, n) => pre + SET_MAP_V1['S0' + n]) : v);
+  const mapKeys = (o) => { const r = {}; Object.keys(o || {}).forEach((k) => { r[mapRef(k)] = o[k]; }); return r; };
+  const hasWork = (a) => !!a && ((a.status && a.status !== 'Not Started') || (a.pubStatus && a.pubStatus !== 'Not Scheduled')
+    || ['topic', 'content', 'concept', 'script', 'prompt', 'refLink', 'fileLink', 'pubLink', 'remarks', 'pubRemarks', 'shootDate', 'location', 'completionDate']
+      .some((f) => a[f]));
+  // Returns a copy of a saved v1 state with every set code and content ID renumbered.
+  // Records of the removed sets that hold any work are kept in removedAssets (never silently lost).
+  // Records that cannot be placed in the new plan (duplicates, unknown IDs) holding any work go to
+  // `quarantine`, also never lost. `out.planReport` is the migration preview shown before anything is saved.
+  function upgradeV1(s) {
+    const out = Object.assign({}, s);
+    const assets = [], removed = [], quarantine = [], seen = new Set();
+    const plan = new Set(buildAssets().map((b) => b.id));
+    const R = { original: 0, originalWithWork: 0, migrated: 0, migratedWithWork: 0, completedRetained: 0, inProgressRetained: 0,
+      archivedWithWork: 0, archivedCompleted: 0, archivedEmpty: 0, duplicates: 0, quarantined: 0, droppedEmptyUnknown: 0, unresolved: 0 };
+    const done = (a) => a.status === 'Approved' || a.status === 'Completed';
+    (s.assets || []).forEach((a) => {
+      if (!a || !a.id) { R.unresolved++; return; }
+      R.original++; const work = hasWork(a); if (work) R.originalWithWork++;
+      const id = mapRef(a.id);
+      if (seen.has(a.id)) { R.duplicates++; if (work) { R.quarantined++; quarantine.push(Object.assign({}, a, { quarantineReason: 'duplicate ID in saved data' })); } return; }
+      seen.add(a.id);
+      if (id.indexOf('OLD-') === 0) {
+        if (work) { R.archivedWithWork++; if (done(a)) R.archivedCompleted++; removed.push(Object.assign({}, a, { id, set: mapRef(a.set), removedOn: '2026-11-27', removedReason: 'Christmas Set 03/04 removed from the plan' })); } else R.archivedEmpty++;
+        return;
+      }
+      if (!plan.has(id)) { if (work) { R.quarantined++; quarantine.push(Object.assign({}, a, { quarantineReason: 'ID not in the 5-set plan' })); } else R.droppedEmptyUnknown++; return; }
+      assets.push(Object.assign({}, a, { id, set: mapRef(a.set) }));
+      R.migrated++; if (work) R.migratedWithWork++; if (done(a)) R.completedRetained++; else if (work) R.inProgressRetained++;
+    });
+    R.activeAfter = plan.size; R.newEmpty = plan.size - R.migrated;
+    out.assets = assets;
+    out.removedAssets = (Array.isArray(s.removedAssets) ? s.removedAssets : []).concat(removed);
+    out.quarantine = (Array.isArray(s.quarantine) ? s.quarantine : []).concat(quarantine);
+    out.planReport = R;
+    const pw = mapKeys((s.settings || {}).pubWindows); Object.keys(pw).forEach((k) => { if (k.indexOf('OLD-') === 0) delete pw[k]; });
+    out.settings = Object.assign({}, s.settings || {}, { pubWindows: pw });
+    out.milestones = mapKeys(s.milestones);
+    if (Array.isArray(s.history)) out.history = s.history.map((h) => (h && h.id ? Object.assign({}, h, { id: mapRef(h.id) }) : h));
+    if (Array.isArray(s.platformLogs)) out.platformLogs = s.platformLogs.map((l) => (l && l.contentId ? Object.assign({}, l, { contentId: mapRef(l.contentId) }) : l));
+    if (Array.isArray(s.mahiReports)) out.mahiReports = s.mahiReports.map((r) => (r ? Object.assign({}, r, { deliverables: (r.deliverables || []).map(mapRef), prev: mapKeys(r.prev) }) : r));
+    out.schema = 2;
+    out.planChange = { on: '2026-11-27', removedSets: ['Christmas Set 03', 'Christmas Set 04'], keptRecords: removed.length };
+    return out;
+  }
+
+  // ---- Seasonal themes (visual only: never change records, dates, deadlines or targets) ----
+  // Month-day windows in Asia/Kolkata. Diwali moves every year, so it stays empty until set in Settings.
+  const SEASON_WINDOWS = { christmas: '12-01..12-26', newyear: '12-27..01-02', pongal: '01-12..01-17', diwali: '' };
+  const SEASON_NAMES = { christmas: 'Christmas', newyear: 'New Year', pongal: 'Pongal', diwali: 'Diwali' };
+  function inSeasonWindow(win, iso) {
+    const m = /^(\d{2})-(\d{2})\.\.(\d{2})-(\d{2})$/.exec(String(win || '').trim()); if (!m) return false;
+    const x = Number(iso.slice(5, 7)) * 100 + Number(iso.slice(8, 10)), a = +m[1] * 100 + +m[2], b = +m[3] * 100 + +m[4];
+    return a <= b ? x >= a && x <= b : x >= a || x <= b;
+  }
+  // settings.season: 'auto' | 'off' | one of SEASON_NAMES. Returns the active festival key or ''.
+  function seasonFor(settings, iso) {
+    const pick = (settings && settings.season) || 'auto';
+    if (pick === 'off') return '';
+    if (SEASON_NAMES[pick]) return pick;
+    const w = Object.assign({}, SEASON_WINDOWS, (settings && settings.seasonWindows) || {});
+    const day = iso || localISO();
+    const byDate = ['newyear', 'christmas', 'pongal', 'diwali'].find((k) => inSeasonWindow(w[k], day));
+    if (byDate) return byDate;
+    // Otherwise follow the active campaign: the production set running today.
+    const set = SETS.find((s) => s.start <= day && day <= s.end);
+    return set ? ({ Christmas: 'christmas', 'New Year': 'newyear', Pongal: 'pongal' })[set.festival] || '' : '';
+  }
 
   const WORKFLOW_START = '2026-11-27';
   const WORKFLOW_END = '2027-11-11';
@@ -83,10 +155,19 @@
     const dt = new Date(Date.UTC(y, m - 1, d + n));
     return dt.toISOString().slice(0, 10);
   }
+  // Every "today", day, week, month and year in MAHI is the Asia/Kolkata calendar date,
+  // whatever time zone the device is set to. India has no daylight saving, so IST = UTC+05:30.
+  const IST_OFFSET_MS = 330 * 60000;
   function localISO(date) {
     const d = date || new Date();
-    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    return new Date(d.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
   }
+  // Start of the IST day after `iso`, as a timestamp (used for "hours left" on deadlines).
+  function istEndOfDay(iso) { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d + 1) - IST_OFFSET_MS; }
+  // IST hour and minute of a moment (for reminder times).
+  function istHM(date) { const t = new Date((date || new Date()).getTime() + IST_OFFSET_MS); return [t.getUTCHours(), t.getUTCMinutes()]; }
+  // Monday of the week containing `iso` (weeks run Monday–Sunday).
+  function weekStart(iso) { const [y, m, d] = iso.split('-').map(Number); const dow = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7; return addDays(iso, -dow); }
   function daysBetween(a, b) { // b - a in days
     const pa = a.split('-').map(Number), pb = b.split('-').map(Number);
     return Math.round((Date.UTC(pb[0], pb[1] - 1, pb[2]) - Date.UTC(pa[0], pa[1] - 1, pa[2])) / 86400000);
@@ -163,9 +244,7 @@
     const n = now || new Date();
     const today = localISO(n);
     if (a.deadline < today) return 'OVERDUE';
-    const [y, m, d] = a.deadline.split('-').map(Number);
-    const endOfDay = new Date(y, m - 1, d + 1, 0, 0, 0).getTime();
-    const hours = (endOfDay - n.getTime()) / 3600000;
+    const hours = (istEndOfDay(a.deadline) - n.getTime()) / 3600000;
     const th = (thresholds || [72, 48, 24]).slice().sort((x, y2) => x - y2);
     for (const t of th) if (hours <= t) return `DUE ≤${t}H`;
     return 'On Track';
@@ -244,7 +323,7 @@
     { key: 'christmas', name: 'Christmas Campaign Completed', icon: '🎄', cond: 'All 352 Christmas deliverables' },
     { key: 'newyear', name: 'New Year Campaign Completed', icon: '🎆', cond: 'All 88 New Year deliverables' },
     { key: 'pongal', name: 'Pongal Campaign Completed', icon: '🍯', cond: 'All 176 Pongal deliverables' },
-    { key: 'all', name: 'All 616 Deliverables Completed', icon: '🏆', cond: 'Complete the entire festival workflow' },
+    { key: 'all', name: 'All Deliverables Completed', icon: '🏆', cond: 'Complete the entire festival workflow' },
   ];
 
   // Evaluate which achievements are currently satisfied by the records
@@ -277,7 +356,7 @@
       if (!a.id) errors.push(`${where}: missing Content ID`);
       else if (ids.has(a.id)) errors.push(`${where}: duplicate Content ID`);
       else ids.add(a.id);
-      if (a.id && !expected.has(a.id)) errors.push(`${where}: unknown Content ID (not part of the confirmed 616 plan)`);
+      if (a.id && !expected.has(a.id)) errors.push(`${where}: unknown Content ID (not part of the confirmed plan)`);
       if (!CONTENT_TYPES.includes(a.type)) errors.push(`${where}: invalid content type "${a.type}"`);
       if (!PROD_STATUSES.includes(a.status)) errors.push(`${where}: invalid production status "${a.status}"`);
       if (!PUB_STATUSES.includes(a.pubStatus)) errors.push(`${where}: invalid publishing status "${a.pubStatus}"`);
@@ -296,7 +375,7 @@
     PROD_STATUSES, PUB_STATUSES, STEP_STATUSES, APPROVAL_STATUSES, QC_STATUSES, CORRECTION_STATUSES, READY_STATUSES,
     PRIORITIES, PLATFORMS, CONTENT_TYPES, DONE_STATUSES, STATUS_COLORS, TYPE_COLORS, BRANCH_STAGES, KANBAN_COLUMNS, KANBAN_DROP,
     ACHIEVEMENTS,
-    slug, pad2, addDays, localISO, daysBetween, fmtDate, defaultPubWindows, setByCode, blankAsset, buildAssets, initialState,
+    slug, pad2, addDays, localISO, istEndOfDay, istHM, weekStart, daysBetween, fmtDate, defaultPubWindows, setByCode, blankAsset, buildAssets, initialState, upgradeV1, SET_MAP_V1, SEASON_WINDOWS, SEASON_NAMES, seasonFor,
     isDone, deadlineFlag, stageOf, kanbanColumn, achievementStatus, validateAssets,
   };
 });

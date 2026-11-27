@@ -36,7 +36,7 @@
     const docs = {};
     D.SETS.forEach((s) => { docs['assets_' + s.code] = { assets: encodeAssets(st.assets.filter((a) => a.set === s.code)) }; });
     const settings = Object.assign({}, st.settings, { ownerPic: '', logo: '', vjs: st.settings.vjs.map((v) => ({ id: v.id, name: v.name, pic: '' })) });
-    docs.meta = { schema: D.SCHEMA_VERSION, settings, customTasks: st.customTasks, notes: st.notes, campaigns: st.campaigns, extraBrands: st.extraBrands, platformLogs: st.platformLogs, achievements: st.achievements, milestones: st.milestones, focusSessions: st.focusSessions.slice(-500), welcomed: !!st.welcomed, alertLog: trimAlertLog(st.alertLog) };
+    docs.meta = { schema: D.SCHEMA_VERSION, settings, customTasks: st.customTasks, notes: st.notes, campaigns: st.campaigns, extraBrands: st.extraBrands, platformLogs: st.platformLogs, achievements: st.achievements, milestones: st.milestones, focusSessions: st.focusSessions.slice(-500), mahiReports: (st.mahiReports || []).slice(0, 300), welcomed: !!st.welcomed, alertLog: trimAlertLog(st.alertLog) };
     docs.media = { ownerPic: st.settings.ownerPic || '', logo: st.settings.logo || '', vjPics: st.settings.vjs.map((v) => v.pic || '') };
     docs.activity = { notifications: st.notifications.slice(0, 300), history: st.history.slice(-1200) };
     if (size(docs.media) > MAX_DOC) docs.media.logo = '';
@@ -52,7 +52,7 @@
     settings.vjs = (settings.vjs || current.settings.vjs).map((v, i) => Object.assign({}, v, { pic: (media.vjPics || [])[i] || '' }));
     return Object.assign({}, current, {
       assets, settings, customTasks: meta.customTasks || [], notes: meta.notes || [], campaigns: meta.campaigns || [], extraBrands: meta.extraBrands || [],
-      platformLogs: meta.platformLogs || [], achievements: meta.achievements || {}, milestones: meta.milestones || {}, focusSessions: meta.focusSessions || [],
+      platformLogs: meta.platformLogs || [], achievements: meta.achievements || {}, milestones: meta.milestones || {}, focusSessions: meta.focusSessions || [], mahiReports: meta.mahiReports || [],
       welcomed: meta.welcomed != null ? meta.welcomed : current.welcomed, alertLog: meta.alertLog || {}, notifications: act.notifications || [], history: act.history || [],
     });
   }
@@ -77,6 +77,7 @@
         lastHash[k] = JSON.stringify(docs[k]);
       }
       S.state.syncedAt = now; sync.lastSync = now;
+      S.save(true, { fromSync: true }); // remember the confirmed sync point across restarts
       setStatus('synced', `Saved to ${adapter.label}`);
     } catch (e) {
       console.warn('MAHI sync push failed', e);
@@ -126,11 +127,16 @@
       clearTimeout(slow);
       const remoteAt = docs.meta ? docs.meta._updatedAt || 0 : 0;
       const localAt = S.state.localChangedAt || 0;
+      const syncedAt = S.state.syncedAt || 0;
+      const localChanged = localAt > syncedAt && hasWork(S.state);
+      const remoteChanged = remoteAt > syncedAt;
       if (!docs.meta) { lastHash = {}; await push(); if (sync.status === 'synced') S.notify('import', 'Cloud sync enabled', `Your MAHI data is now saved to ${adapter.label}.`); }
-      else if (remoteAt >= localAt || !S.state.syncedAt) {
-        if (localAt > remoteAt && S.state.assets.some(D.isDone)) await keepNewerLocal(docs, remoteAt, localAt);
-        else applyDocs(docs);
-      } else { lastHash = hashAll(Object.fromEntries(Object.entries(docs).map(([k, v]) => [k, strip(v)]))); await push(); }
+      else if (localChanged && remoteChanged) {
+        // Both copies changed since they were last in step (first sign-in on a browser that already has work,
+        // or edits on two devices while one was offline): merge, never overwrite either side.
+        await mergeAndPush(docs, localAt > remoteAt);
+      } else if (remoteChanged) applyDocs(docs);
+      else { lastHash = hashAll(Object.fromEntries(Object.entries(docs).map(([k, v]) => [k, strip(v)]))); await push(); }
       if (sync.status !== 'error') setStatus('synced', `Saved to ${adapter.label}`);
     } catch (e) { clearTimeout(slow); console.warn('MAHI sync start failed', e); setStatus('error', errorText(e)); }
     // live updates: when another device finishes a save (meta written last), reload the account copy
@@ -145,15 +151,56 @@
     document.addEventListener('visibilitychange', recheck);
     window.addEventListener('online', () => { recheck(); schedulePush(); });
   }
-  async function keepNewerLocal(docs, remoteAt, localAt) {
-    const UI = root.MAHI_UI;
-    const remoteDone = decode(docs, S.state).assets.filter(D.isDone).length, localDone = S.state.assets.filter(D.isDone).length;
-    const keepLocal = UI ? await UI.confirm('Two versions found', `This browser has changes from <b>${new Date(localAt).toLocaleString()}</b> (${localDone} completed) that are newer than your cloud copy from <b>${new Date(remoteAt).toLocaleString()}</b> (${remoteDone} completed).<br><br>Keep this browser's version and save it to the cloud? Choose Cancel to load the cloud copy instead.`, "Keep this browser's version") : true;
-    if (keepLocal) { lastHash = {}; await push(); } else applyDocs(docs);
+  // ---------- merge (no completed work, task or note is ever dropped) ----------
+  function hasWork(st) {
+    return st.assets.some((a) => a.status !== 'Not Started' || a.pubStatus !== 'Not Scheduled') || st.customTasks.length > 0 || st.notes.length > 0 || st.focusSessions.length > 0;
   }
+  const pristine = (a) => { const b = BASE[a.id]; return !b || Object.keys(a).every((k) => k.startsWith('__') || a[k] === b[k] || (a[k] === '' && b[k] == null)); };
+  function unionById(newer, older, prefer) {
+    const out = new Map();
+    older.forEach((x) => { if (x && x.id != null) out.set(x.id, x); });
+    newer.forEach((x) => { if (!x || x.id == null) return; const o = out.get(x.id); out.set(x.id, o && prefer ? prefer(x, o) : x); });
+    return [...out.values()];
+  }
+  function earliest(a, b) { const o = Object.assign({}, b); Object.keys(a || {}).forEach((k) => { if (!o[k] || String(a[k]) < String(o[k])) o[k] = a[k]; }); return o; }
+  function mergeStates(local, remote, localNewer) {
+    const newer = localNewer ? local : remote, older = localNewer ? remote : local;
+    const rById = {}; remote.assets.forEach((a) => { rById[a.id] = a; });
+    const assets = local.assets.map((l) => {
+      const r = rById[l.id]; if (!r) return l;
+      if (pristine(r)) return l; if (pristine(l)) return r;
+      if (D.isDone(l) !== D.isDone(r)) return D.isDone(l) ? l : r; // a completion on either device wins
+      return localNewer ? l : r;
+    });
+    const doneWins = (x, o) => (o.status === 'Completed' && x.status !== 'Completed' ? o : x);
+    const list = (k, prefer) => unionById(newer[k] || [], older[k] || [], prefer);
+    const byTs = (a, b) => String(b.ts || '').localeCompare(String(a.ts || ''));
+    return Object.assign({}, newer, {
+      assets, settings: newer.settings,
+      customTasks: list('customTasks', doneWins), notes: list('notes'), focusSessions: list('focusSessions'), mahiReports: list('mahiReports'), campaigns: list('campaigns'),
+      extraBrands: list('extraBrands'), platformLogs: list('platformLogs'), notifications: list('notifications').sort(byTs).slice(0, 500),
+      history: unionById(newer.history.map((h, i) => Object.assign({ id: 'h' + h.ts + h.id + h.field }, h)), older.history.map((h) => Object.assign({ id: 'h' + h.ts + h.id + h.field }, h))).sort((a, b) => String(a.ts).localeCompare(String(b.ts))).map((h) => { const c = Object.assign({}, h); delete c.id; return c; }),
+      achievements: earliest(local.achievements, remote.achievements), milestones: earliest(local.milestones, remote.milestones),
+    });
+  }
+  async function mergeAndPush(docs, localNewer) {
+    const before = S.state.assets.filter(D.isDone).length + S.state.customTasks.length + S.state.notes.length;
+    const merged = mergeStates(S.state, decode(docs, S.state), localNewer);
+    S.replaceAll(merged); // keeps the previous browser copy under "<key>.before-replace"
+    lastHash = {}; await push();
+    const after = S.state.assets.filter(D.isDone).length + S.state.customTasks.length + S.state.notes.length;
+    S.notify('import', 'Browser and cloud copies merged', `Work from this browser and your cloud account was combined (${after} completed items, tasks and notes; ${before} were in this browser). Nothing was discarded.`);
+  }
+
+  // True only when every part of the current state is confirmed in the cloud.
+  function unsyncedParts() { const docs = encode(S.state); return Object.keys(docs).filter((k) => lastHash[k] !== JSON.stringify(docs[k])); }
+  function canDropLocalCopy() { return !!adapter && sync.status === 'synced' && !pushing && !S.pendingSave && unsyncedParts().length === 0; }
 
   S.on('saved', (info) => { if (!(info && info.fromSync)) schedulePush(); });
   sync.start = start;
+  sync.canDropLocalCopy = canDropLocalCopy;
+  sync.unsyncedParts = unsyncedParts;
+  sync.mergeStates = mergeStates;
   sync.pushNow = () => { clearTimeout(pushTimer); return push(); };
   sync.stop = () => { if (unsub) unsub(); adapter = null; };
   sync.encode = encode; sync.decode = decode;

@@ -1,21 +1,18 @@
-// Serves dist/ exactly like Vercel will: same security headers (from vercel.json) and SPA fallback.
-// Usage: npm run build && node scripts/serve-dist.mjs [port]
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dist = path.join(root, 'dist');
-const cfg = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8'));
-const baseHeaders = Object.fromEntries(cfg.headers[0].headers.map((h) => [h.key, h.value]));
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
-const port = Number(process.argv[2] || 4173);
-
+// Serves a built folder locally WITH the headers from public/_headers (so the CSP is tested before deploying).
+// Usage: node scripts/serve-dist.mjs <dir> <port>
+import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+const dir = path.resolve(process.argv[2] || 'dist'), port = Number(process.argv[3] || 8792);
+const rules = []; let cur = null;
+for (const line of fs.readFileSync(path.join(dir, '_headers'), 'utf8').split(/\r?\n/)) {
+  if (!line.trim() || line.trim().startsWith('#')) continue;
+  if (!/^\s/.test(line)) { cur = { pat: line.trim(), h: {} }; rules.push(cur); } else { const i = line.indexOf(':'); cur.h[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+}
+const match = (pat, p) => pat === p || (pat.endsWith('*') && p.startsWith(pat.slice(0, -1)));
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.woff2': 'font/woff2' };
 http.createServer((req, res) => {
-  const url = decodeURIComponent(req.url.split('?')[0]);
-  let file = path.join(dist, url);
-  if (!file.startsWith(dist) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dist, 'index.html');
-  res.writeHead(200, { ...baseHeaders, 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
-  fs.createReadStream(file).pipe(res);
-}).listen(port, () => console.log(`MAHI dist served with production headers on http://localhost:${port}`));
+  const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let f = path.join(dir, p); if (!f.startsWith(dir) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(dir, 'index.html');
+  const h = {}; rules.forEach((r) => { if (match(r.pat, p)) Object.assign(h, r.h); });
+  delete h['Strict-Transport-Security']; h['Content-Security-Policy'] = (h['Content-Security-Policy'] || '').replace('; upgrade-insecure-requests', ''); // plain http on localhost
+  res.writeHead(200, Object.assign({ 'Content-Type': types[path.extname(f)] || 'application/octet-stream' }, h)); fs.createReadStream(f).pipe(res);
+}).listen(port, '127.0.0.1', () => console.log('serving ' + dir + ' on http://127.0.0.1:' + port));

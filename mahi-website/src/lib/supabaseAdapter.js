@@ -52,3 +52,36 @@ export function createReportsApi(supabase, userId) {
     },
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Schema v2 (current): record-level sync. Writes ONLY through public.mahi_push, reads through
+// public.mahi_pull. Direct table writes are revoked in the database, so this is the only path.
+const TABLES_V2 = ['profiles', 'brands', 'campaigns', 'sets', 'deliverables', 'tasks', 'work_reports', 'work_sessions', 'focus_sessions', 'achievements', 'notifications', 'notes'];
+export function createRpcAdapter(supabase, userId) {
+  const device = (() => {
+    try { let d = localStorage.getItem('mahi.device'); if (!d) { d = 'web-' + Math.random().toString(36).slice(2, 8); localStorage.setItem('mahi.device', d); } return d; } catch (e) { return 'web'; }
+  })();
+  return {
+    label: 'your MAHI cloud account',
+    device,
+    async rpc(name, args) {
+      let res;
+      try { res = await supabase.rpc(name, args); } catch (e) { throw Object.assign(new Error(e.message || 'Network error'), { network: true }); }
+      const { data, error } = res;
+      if (error) {
+        const e = new Error(error.message || 'Request failed');
+        if (error.code === '28000' || error.status === 401 || /JWT|not signed in|auth/i.test(error.message || '')) e.auth = true;
+        if (/fetch|network|Failed to fetch|timeout/i.test(error.message || '') || error.status === 0) e.network = true;
+        throw e;
+      }
+      return data;
+    },
+    subscribe(onChange) {
+      // Realtime is only a hint that something changed; the pull itself goes through mahi_pull (RLS applies).
+      const ch = supabase.channel('mahi-v2-' + userId);
+      TABLES_V2.forEach((t) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'mahi_' + t, filter: `user_id=eq.${userId}` }, () => onChange(t)));
+      ch.subscribe();
+      return () => { supabase.removeChannel(ch); };
+    },
+  };
+}

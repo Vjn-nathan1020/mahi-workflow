@@ -65,11 +65,19 @@ drop policy if exists "mahi_reports owner delete" on public.mahi_reports;
 create policy "mahi_reports owner select" on public.mahi_reports for select to authenticated using ((select auth.uid()) = user_id);
 create policy "mahi_reports owner insert" on public.mahi_reports for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy "mahi_reports owner delete" on public.mahi_reports for delete to authenticated using ((select auth.uid()) = user_id);
+-- v2: writes are not allowed on the v1 tables, so the write policies are removed again (owner-read only).
+drop policy if exists "mahi_docs owner insert"    on public.mahi_docs;
+drop policy if exists "mahi_docs owner update"    on public.mahi_docs;
+drop policy if exists "mahi_docs owner delete"    on public.mahi_docs;
+drop policy if exists "mahi_reports owner insert" on public.mahi_reports;
+drop policy if exists "mahi_reports owner delete" on public.mahi_reports;
 
 -- Signed-out visitors (anon role) get no access at all.
 revoke all on public.mahi_docs, public.mahi_reports from anon;
-grant select, insert, update, delete on public.mahi_docs to authenticated;
-grant select, insert, delete on public.mahi_reports to authenticated;
+-- v1 tables are READ-ONLY since MAHI v2 (migration_003): all writes go through public.mahi_push().
+-- Re-running this file must never re-open direct writes.
+revoke insert, update, delete, truncate on public.mahi_docs, public.mahi_reports from authenticated;
+grant select on public.mahi_docs, public.mahi_reports to authenticated;
 
 -- ---------- 4. Realtime: live updates between your devices ------------
 do $$

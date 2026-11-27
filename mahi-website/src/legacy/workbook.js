@@ -315,7 +315,7 @@
     });
     pctCF(Fc, `L${FC_ROW0}:L${FC_ROW0 + 6}`); pctCF(Fc, 'I4:I6');
     Fc.getCell(`A${FC_ROW0 + 8}`).value = 'Production dates are confirmed and never change automatically. Publishing windows default to the 7 days after each production end – edit them as needed.';
-    Fc.getCell(`A${FC_ROW0 + 9}`).value = 'Set 05 (New Year) and Set 07 (Pongal) are COMPRESSED 3-day schedules – start scripts, prompts and shoots in advance.';
+    Fc.getCell(`A${FC_ROW0 + 9}`).value = 'Set 03 (New Year) and Set 05 (Pongal) are COMPRESSED 3-day schedules – start scripts, prompts and shoots in advance.';
     Fc.getCell(`A${FC_ROW0 + 9}`).font = { bold: true, color: { argb: 'FFB71C1C' } };
     Fc.views = [{ state: 'frozen', ySplit: 3, showGridLines: false }];
     const fcCell = (code, col) => `${q(SHEETS.fest)}!$${col}$${FC_ROW0 + S_IDX(code)}`;
@@ -349,7 +349,7 @@
 
     // ---- Publishing Calendar ----
     const Pc = ws[SHEETS.pub];
-    banner(Pc, 'SOCIAL MEDIA PUBLISHING CALENDAR', 'One row per production asset (616). Production totals never double-count: extra platforms go to the Platform Publishing Log.', 16);
+    banner(Pc, 'SOCIAL MEDIA PUBLISHING CALENDAR', 'One row per production asset (440). Production totals never double-count: extra platforms go to the Platform Publishing Log.', 16);
     const pubCtx = { c: (f) => colLetter(PUB_SPEC.findIndex((x) => x.f === f) + 1) };
     PUB_SPEC.find((x) => x.f === '__title').fx = (ctx, r, a) => { const t = trackerFor(a); const m = `MATCH($A${r},${t.rng('id')},0)`; return `IFERROR(IF(INDEX(${t.rng('topic')},${m})="",$A${r},INDEX(${t.rng('topic')},${m})),$A${r})`; };
     PUB_SPEC.find((x) => x.f === '__prod').fx = (ctx, r, a) => { const t = trackerFor(a); return `IFERROR(INDEX(${t.rng('status')},MATCH($A${r},${t.rng('id')},0)),"")`; };
@@ -419,7 +419,7 @@
 
     // ---- Brand Master Plan ----
     const Bm = ws[SHEETS.brand];
-    banner(Bm, 'BRAND-WISE PRODUCTION MASTER PLAN', 'Per-set allocation (baseline, repeated across all 7 sets) and live progress across the whole festival phase.', 13);
+    banner(Bm, 'BRAND-WISE PRODUCTION MASTER PLAN', 'Per-set allocation (baseline, repeated across all 5 sets) and live progress across the whole festival phase.', 13);
     [6, 24, 10, 10, 10, 10, 14, 8, 12, 12, 12, 12, 22].forEach((x, i) => { Bm.getColumn(i + 1).width = x; });
     header(Bm, 3, ['S.No', 'Brand', 'Posters / Set', 'AI Videos / Set', 'VJ Videos / Set', 'Total / Set', 'Assigned VJ', 'Sets', 'All-Set Target', 'Completed', 'Pending', 'Completion %', 'Progress']);
     D.BRANDS.forEach((b, i) => {
@@ -512,7 +512,7 @@
       fx(Db.getCell(`F${r}`), `COUNTIF(${t.rng('__flag')},"OVERDUE")`); fx(Db.getCell(`G${r}`), `IF(C${r}=0,0,D${r}/C${r})`, PCT);
     });
     pctCF(Db, `G${r0 + 2}:G${r0 + 4}`);
-    r0 = 37; section(r0, 'SEVEN-SET COMPLETION');
+    r0 = 37; section(r0, 'SET COMPLETION');
     header(Db, r0 + 1, ['Set', 'Festival', 'Target', 'Completed', 'Completion %', 'Status'], { offset: 1, height: 20 });
     D.SETS.forEach((s, i) => {
       const r = r0 + 2 + i, fr = FC_ROW0 + i;
@@ -667,7 +667,7 @@
     };
     perfMeta.type = groupTable('2. CONTENT TYPE REPORT (Posters / AI Videos / VJ Videos)', [{ label: 'Posters', l: [P] }, { label: 'AI Videos', l: [A] }, { label: 'VJ Videos', l: vjOnly }], (t) => `${t.rng('id')},"<>"`, (g) => g.l);
     perfMeta.fest = groupTable('3. FESTIVAL PRODUCTION REPORT', D.FESTIVALS.map((f) => ({ label: f.name })), (t, g) => `${t.rng('festival')},"${g.label}"`);
-    perfMeta.set = groupTable('4. SEVEN-SET PRODUCTION REPORT', D.SETS.map((s) => ({ label: s.label })), (t, g) => `${t.rng('set')},"${g.label}"`);
+    perfMeta.set = groupTable('4. SET PRODUCTION REPORT', D.SETS.map((s) => ({ label: s.label })), (t, g) => `${t.rng('set')},"${g.label}"`);
     perfMeta.brand = groupTable('5. BRAND-WISE REPORT', D.BRANDS.map((b) => ({ label: b.name })), (t, g) => `${t.rng('brand')},"${g.label}"`);
     perfMeta.vj = groupTable('6. VJ PERFORMANCE REPORT', D.VJ_IDS.map((id, i) => ({ label: id, i })), (t) => `${t.rng('id')},"<>"`, (g) => [TR[2 + g.i]]);
     perfMeta.vj.names = true;
@@ -742,7 +742,7 @@
 
     // ---- My Daily Planner ----
     const Dp = ws[SHEETS.daily];
-    banner(Dp, 'MY DAY – DAILY WORK PLANNER', 'Production figures update from the trackers. Custom tasks below are tracked separately and never change the 616 festival target.', 9);
+    banner(Dp, 'MY DAY – DAILY WORK PLANNER', 'Production figures update from the trackers. Custom tasks below are tracked separately and never change the 440 festival target.', 9);
     [4, 30, 14, 12, 13, 13, 13, 24, 30].forEach((x, i) => { Dp.getColumn(i + 1).width = x; });
     lab(Dp.getCell('B4'), 'Planner date'); inp(Dp.getCell('C4'), null, DATE_FMT); Dp.getCell('C4').value = { formula: 'TODAY()' }; Dp.getCell('D4').value = '← defaults to today; type any date to plan ahead';
     header(Dp, 6, ['', 'Production on this date', 'Posters', 'AI Videos', 'VJ Videos', 'Total'], { height: 20 });
@@ -790,7 +790,7 @@
 
     // ---- Annual Workflow 2027 ----
     const Aw = ws[SHEETS.annual];
-    banner(Aw, 'ANNUAL WORKFLOW 27 NOV 2026 – 11 NOV 2027', 'The 7 confirmed sets are the locked baseline (616). Add new campaigns / sets / brands / services below – their targets are kept separate.', 13);
+    banner(Aw, 'ANNUAL WORKFLOW 27 NOV 2026 – 11 NOV 2027', 'The 5 confirmed sets are the locked baseline (440). Add new campaigns / sets / brands / services below – their targets are kept separate.', 13);
     [16, 18, 22, 13, 13, 9, 9, 9, 9, 10, 9, 14, 24].forEach((x, i) => { Aw.getColumn(i + 1).width = x; });
     header(Aw, 4, ['Month', 'Confirmed campaigns', 'Baseline due (assets)', 'Baseline completed', 'New campaign targets', 'Notes']);
     const months = [];
@@ -854,9 +854,9 @@
     [
       'WORKBOOK STRUCTURE',
       '• MAHI Dashboard – live KPIs, festival / VJ / set progress, charts and quick navigation.',
-      '• Poster Tracker (434), AI Video Tracker (98), VJ 01/02/03 Trackers (28 each) = the 616 authoritative production records.',
+      '• Poster Tracker (310), AI Video Tracker (70), VJ 01/02/03 Trackers (20 each) = the 440 authoritative production records.',
       '• Set 01–07 sheets, Brand Master Plan, Festival Calendar, Reports, Alerts, Workflow Chart and Achievements are all formula-driven from those records.',
-      '• Publishing Calendar holds one publishing record per asset (616). Platform Publishing Log holds additional per-platform posts – never counted in production totals.',
+      '• Publishing Calendar holds one publishing record per asset (440). Platform Publishing Log holds additional per-platform posts – never counted in production totals.',
       '',
       'DAILY USE',
       '1. Find the asset (filter by Set / Brand / Status) in its tracker and update the dropdowns.',
@@ -873,7 +873,7 @@
       'Blue-grey columns in trackers (Publishing Date/Status, Workflow Stage, Done, Deadline Flag) are formulas – do not overwrite them.',
       '',
       'EXPANDING THE PLAN',
-      '• Add new festival campaigns, sets, brands, services or custom targets in "Annual Workflow 2027" (rows below the 7 confirmed sets). They are reported separately from the 616 baseline.',
+      '• Add new festival campaigns, sets, brands, services or custom targets in "Annual Workflow 2027" (rows below the 5 confirmed sets). They are reported separately from the 616 baseline.',
       '• Formulas cover rows up to ' + LAST + ', so new rows you add at the bottom of a tracker are counted automatically.',
       '',
       'MAHI WEB APP',

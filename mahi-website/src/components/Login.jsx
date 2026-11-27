@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { supabase, allowSignup } from '../lib/supabase.js';
 import AuthLayout, { inputCls, btnCls, linkCls } from './AuthLayout.jsx';
 
-export default function Login() {
+export default function Login({ notice }) {
   const [mode, setMode] = useState('signin'); // signin | forgot | signup
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState(null); // {type, text}
+  const [msg, setMsg] = useState(notice || null); // {type, text}
 
   const submit = async (e) => {
     e.preventDefault();
@@ -19,7 +19,7 @@ export default function Login() {
       } else if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin + '/' });
         if (error) throw error;
-        setMsg({ type: 'ok', text: 'If this email has a MAHI account, a password reset link is on its way. Check your inbox.' });
+        setMsg({ type: 'ok', text: 'If this email has a MAHI account, a reset link is on its way. Check your inbox and spam folder, and open the link in this same browser. The link works once and expires after about an hour.' });
       } else {
         if (password.length < 10) throw new Error('Use at least 10 characters for your password.');
         const { error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: window.location.origin + '/' } });
@@ -29,7 +29,11 @@ export default function Login() {
       }
     } catch (err) {
       const t = err && err.message ? err.message : String(err);
-      setMsg({ type: 'bad', text: /Invalid login/i.test(t) ? 'Email or password is incorrect.' : t });
+      const friendly = /Invalid login/i.test(t) ? 'Email or password is incorrect. If you are not sure of the password, use “Forgot password?”.'
+        : /not confirmed/i.test(t) ? 'This account is not confirmed yet. Confirm it from the email link, or ask the owner to confirm it in Supabase.'
+        : /rate limit|too many|security purposes/i.test(t) ? 'Too many attempts or emails in a short time. Please wait a few minutes and try again.'
+        : /fetch|network/i.test(t) ? 'Cannot reach the MAHI server. Check your internet connection and try again.' : t;
+      setMsg({ type: 'bad', text: friendly });
     } finally { setBusy(false); }
   };
 

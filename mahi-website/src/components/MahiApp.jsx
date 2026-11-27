@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase.js';
-import { createSyncAdapter, createReportsApi } from '../lib/supabaseAdapter.js';
+import { createRpcAdapter } from '../lib/supabaseAdapter.js';
 
 const IDLE_MIN = Number(import.meta.env.VITE_IDLE_SIGNOUT_MINUTES || 0);
 const BACKUP_DAYS = 7;
@@ -16,16 +16,28 @@ export default function MahiApp({ session }) {
     booted.current = true;
     const uid = session ? session.user.id : 'local';
     window.MAHI_STORAGE_KEY = 'mahi.state.' + uid; // browser copy (the only copy in LOCAL mode)
-    window.MAHI_CLOUD = session ? createReportsApi(supabase, uid) : null;
+    window.MAHI_CLOUD = null; // v1 saved-reports table is read-only since migration 003; reports live in the workspace data
 
-    const signOut = async () => {
-      try { localStorage.removeItem(window.MAHI_STORAGE_KEY); } catch (e) { /* ignore */ }
+    // The browser copy is removed only after the cloud has confirmed every change.
+    // If anything is still unsent (offline, session expired), it is kept and uploads at the next sign-in here.
+    const signOut = async (interactive = true) => {
+      const Y = window.MAHI_SYNC;
+      try { window.MAHI_STORE.flush(); } catch (e) { /* ignore */ }
+      try { if (Y && Y.pushNow) await Y.pushNow(); } catch (e) { /* handled below */ }
+      const safe = !!(Y && Y.canDropLocalCopy && Y.canDropLocalCopy());
+      if (!safe && interactive && window.MAHI_UI) {
+        const go = await window.MAHI_UI.confirm('Some changes are not in the cloud yet',
+          'MAHI could not confirm that your latest changes reached your cloud account (you may be offline). They stay saved in this browser and upload automatically the next time you sign in here. Sign out anyway?',
+          'Sign out and keep this browser copy');
+        if (!go) return;
+      }
+      if (safe) { try { localStorage.removeItem(window.MAHI_STORAGE_KEY); localStorage.removeItem(window.MAHI_STORAGE_KEY + '.cloud2'); } catch (e) { /* ignore */ } }
       await supabase.auth.signOut();
       window.location.replace('/');
     };
 
     window.MAHI_APP.boot({
-      syncAdapter: session ? createSyncAdapter(supabase, uid) : null,
+      syncAdapter: session ? createRpcAdapter(supabase, uid) : null,
       onLogout: session ? signOut : null,
       userEmail: session ? session.user.email : '',
     });
@@ -55,8 +67,7 @@ export default function MahiApp({ session }) {
       ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach((ev) => document.addEventListener(ev, bump, { passive: true, capture: true }));
       setInterval(async () => {
         if (Date.now() - last > IDLE_MIN * 60000) {
-          try { await window.MAHI_SYNC.pushNow(); } catch (e) { /* ignore */ }
-          signOut();
+          signOut(false);
         }
       }, 30000);
     }

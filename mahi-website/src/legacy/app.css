@@ -267,103 +267,130 @@ h2{margin:0;font-size:22px;letter-spacing:-.01em}h3{margin:0;font-size:15px}h4{m
 .certificate{text-align:center;padding:28px;border:6px double var(--gold);border-radius:12px;background:linear-gradient(160deg,#fffdf2,#f4fbf6);color:#1b1b1b}
 .cert-top{font-weight:700;letter-spacing:.1em;color:#1B5E20;font-size:12px}.cert-trophy{font-size:56px}.cert-name{font-size:28px;font-weight:800;color:#12263F;margin:6px 0}.cert-big{font-size:22px;font-weight:800;color:#1B5E20;margin:14px 0;letter-spacing:.04em}.cert-sign{margin-top:18px;font-style:italic;color:#555}
 
-/* ---------- MAHI dock ---------- */
-.mahi-dock{position:fixed;right:18px;bottom:18px;width:236px;z-index:50;border-radius:20px;background:var(--panel);border:1px solid var(--line);box-shadow:0 14px 40px rgba(10,30,20,.22);transition:width .25s,transform .25s}
+/* ---------- MAHI dock (character v2, 2026-11) ---------- */
+/* Restrained chrome: thin border, flat surface, design tokens from theme-v2.css */
+.mahi-dock{position:fixed;right:18px;bottom:18px;width:252px;z-index:50;border-radius:var(--r-3,8px);background:var(--surface,var(--panel));color:var(--text,inherit);border:1px solid var(--border,var(--line));box-shadow:var(--shadow-pop,0 8px 24px -6px rgba(29,32,35,.14));transition:width .2s,right .2s,opacity .2s,transform .2s}
 .mahi-dock.hidden{display:none}
-.md-bar{display:flex;align-items:center;gap:0;padding:4px 6px 4px 12px;border-bottom:1px solid var(--line);cursor:default}.md-bar .icon-btn{width:26px;height:26px;font-size:12px}
-.md-name{font-weight:800;letter-spacing:.12em;font-size:12px;color:var(--forest);flex:1}:root[data-theme="dark"] .md-name{color:#7fd69a}.md-status{font-size:10px;color:var(--muted)}
-.mahi-dock.min{width:132px;cursor:pointer}.mahi-dock.min .md-body{height:0;overflow:hidden}.mahi-dock.min .mahi-bubble{display:none}.mahi-dock.min [data-m=pause],.mahi-dock.min [data-m=sound]{display:none}
+.md-bar{display:flex;align-items:center;gap:1px;padding:4px 4px 4px 10px;border-bottom:1px solid var(--border,var(--line));cursor:default}
+.md-bar .icon-btn{width:24px;height:26px;font-size:11.5px;flex:none}
+.md-name{font-weight:700;letter-spacing:.14em;font-size:11px;color:var(--accent-text,var(--accent));flex:1}
+.md-status{font-size:10px;color:var(--text-2)}
+.md-bar [data-m=voice].on{background:var(--accent-soft);color:var(--accent-text);border-radius:var(--r-2,6px)}
+.mahi-dock.min{width:132px;cursor:pointer}.mahi-dock.min .md-bar{border-bottom:0}.mahi-dock.min .md-body{height:0;overflow:hidden}.mahi-dock.min .mahi-bubble{display:none}
+.mahi-dock.min [data-m=pause],.mahi-dock.min [data-m=sound],.mahi-dock.min [data-m=voice],.mahi-dock.min [data-m=chat]{display:none}
 .md-body{position:relative}
-.mahi-stage{position:relative;height:216px;border-radius:0 0 20px 20px;overflow:hidden;background:radial-gradient(circle at 50% 40%,var(--mood1,#e9f7ee),var(--mood2,#d5ece0));transition:background .6s}
-#mahi[data-mood=happy] .mahi-stage{--mood1:#fff4cf;--mood2:#ffe08a}
-#mahi[data-mood=celebrate] .mahi-stage{--mood1:#ffd9e6;--mood2:#ff9fbe}
-#mahi[data-mood=warn] .mahi-stage{--mood1:#ffe7d3;--mood2:#ffc59b}
-#mahi[data-mood=alert] .mahi-stage{--mood1:#d6e2f0;--mood2:#1f3a56}
-#mahi[data-mood=sleep] .mahi-stage{--mood1:#ddd3d6;--mood2:#b7a5ab}
-#mahi[data-festival=christmas] .mahi-stage{--mood2:#cfe8d6}
-#mahi[data-festival=newyear] .mahi-stage{--mood2:#d6dff5}
-#mahi[data-festival=pongal] .mahi-stage{--mood2:#fbe7a6}
-:root[data-theme="dark"] .mahi-stage{--mood1:#1d3a2c;--mood2:#132a1f}
-.mahi-svg{width:100%;height:100%;display:block;cursor:pointer;overflow:visible}
-.mahi-bubble{position:absolute;right:calc(100% + 12px);bottom:40px;width:260px;background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 4px 16px;padding:12px 30px 12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.18);opacity:0;transform:translateX(10px) scale(.96);pointer-events:none;transition:opacity .25s,transform .25s}
+.mahi-stage{position:relative;height:216px;overflow:hidden;border-radius:0 0 var(--r-3,8px) var(--r-3,8px);background:var(--bg-sunken)}
+#mahi[data-mood=happy] .mahi-stage,#mahi[data-mood=celebrate] .mahi-stage{background:var(--accent-soft)}
+#mahi[data-mood=warn] .mahi-stage{background:var(--warning-soft)}
+#mahi[data-mood=alert] .mahi-stage{background:var(--danger-soft)}
+#mahi[data-mood=sleep] .mahi-stage{background:var(--neutral-soft)}
+.mahi-svg{width:100%;height:100%;display:block;cursor:pointer;overflow:hidden}
+.mahi-svg:focus{outline:none}.mahi-svg:focus-visible{outline:2px solid var(--focus);outline-offset:-3px}
+.mahi-bubble{position:absolute;right:calc(100% + 10px);bottom:24px;width:260px;background:var(--surface-raised,var(--panel));color:var(--text,inherit);border:1px solid var(--border,var(--line));border-radius:var(--r-3,8px);padding:10px 28px 10px 12px;box-shadow:var(--shadow-pop);opacity:0;transform:translateX(6px);pointer-events:none;transition:opacity .2s,transform .2s;z-index:1}
 .mahi-bubble.show{opacity:1;transform:none;pointer-events:auto}
-.mb-msg{font-weight:700;font-size:13.5px}.mb-detail{font-size:12px;color:var(--muted);margin-top:4px}.mb-action{margin-top:8px;background:var(--forest);color:#fff;border:0;border-radius:8px;padding:5px 10px;font-weight:600;cursor:pointer;font-size:12px}
-.mb-close{position:absolute;top:6px;right:6px;border:0;background:none;cursor:pointer;color:var(--muted);font-size:16px}
-/* LED face */
-.m-eye rect,.m-eye path,.m-mouth *{fill:#5CF5C8}.m-eye .stroke,.m-mouth .stroke{fill:none;stroke:#5CF5C8;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}.m-eye .stroke.thin,.m-mouth .stroke.thin{stroke-width:3.4}
-.m-face{mask:url(#mLed)}.m-blush rect{fill:#FF8FB1;opacity:.85}
-#mahi[data-festival=pongal] .m-eye rect,#mahi[data-festival=pongal] .m-eye path{fill:#7CFFB2}
-.m-eyes{transition:transform .5s ease}
-/* idle life */
-.m-root{transform-box:view-box;transform-origin:100px 220px}
-.m-body{animation:breathe 4s ease-in-out infinite;transform-box:view-box;transform-origin:100px 216px}
-.m-head{animation:float 5s ease-in-out infinite;transform-box:view-box;transform-origin:100px 130px;transition:transform .4s}
-.m-leaf{animation:leaf 3.5s ease-in-out infinite;transform-box:view-box;transform-origin:128px 54px}
-.m-pod{animation:podglow 2.4s ease-in-out infinite}
-@keyframes breathe{50%{transform:scaleY(1.018) translateY(-1px)}}
-@keyframes float{50%{transform:translateY(-2.5px)}}
-@keyframes leaf{50%{transform:rotate(-7deg)}}
-@keyframes podglow{50%{opacity:.35}}
-/* arms & poses */
-.m-arm{transform-box:view-box;transition:transform .45s cubic-bezier(.3,1.4,.5,1)}
-.m-arm-l{transform-origin:65px 152px}.m-arm-r{transform-origin:134px 152px}
-.m-thumb{opacity:0;transition:opacity .2s}
-.mahi-svg[data-pose=wave] .m-arm-r{animation:wave .7s ease-in-out infinite alternate}
-@keyframes wave{from{transform:rotate(-150deg)}to{transform:rotate(-115deg)}}
-.mahi-svg[data-pose=thumbs] .m-arm-r{transform:rotate(-140deg)}.mahi-svg[data-pose=thumbs] .m-thumb{opacity:1}
-.mahi-svg[data-pose=hold] .m-arm-l{transform:rotate(-38deg)}.mahi-svg[data-pose=hold] .m-arm-r{transform:rotate(38deg)}
-.mahi-svg[data-pose=type] .m-arm-l{animation:typeL .3s ease-in-out infinite alternate}.mahi-svg[data-pose=type] .m-arm-r{animation:typeR .3s .15s ease-in-out infinite alternate}
-@keyframes typeL{from{transform:rotate(-30deg)}to{transform:rotate(-38deg)}}@keyframes typeR{from{transform:rotate(30deg)}to{transform:rotate(38deg)}}
-.mahi-svg[data-pose=drink] .m-arm-r{transform:rotate(-100deg)}
-.mahi-svg[data-pose=water] .m-arm-r{transform:rotate(-60deg)}
-.mahi-svg[data-pose=point] .m-arm-r{transform:rotate(-120deg)}.mahi-svg[data-pose=point] .m-head{transform:rotate(5deg)}
-.mahi-svg[data-pose=stretch] .m-arm-l{animation:stretchL 1.4s ease-in-out infinite alternate}.mahi-svg[data-pose=stretch] .m-arm-r{animation:stretchR 1.4s ease-in-out infinite alternate}
-@keyframes stretchL{from{transform:rotate(130deg)}to{transform:rotate(165deg)}}@keyframes stretchR{from{transform:rotate(-130deg)}to{transform:rotate(-165deg)}}
-.mahi-svg[data-pose=clap] .m-arm-l{animation:clapL .28s ease-in-out infinite alternate}.mahi-svg[data-pose=clap] .m-arm-r{animation:clapR .28s ease-in-out infinite alternate}
-@keyframes clapL{from{transform:rotate(-40deg)}to{transform:rotate(-62deg)}}@keyframes clapR{from{transform:rotate(40deg)}to{transform:rotate(62deg)}}
-.mahi-svg[data-pose=write] .m-arm-r{animation:typeR .4s ease-in-out infinite alternate}
-/* whole-body reactions */
-.mahi-svg.a-jump .m-root{animation:jump .8s cubic-bezier(.3,1.5,.5,1) 2}
-.mahi-svg.a-bounce .m-root{animation:bounce .6s ease-in-out 4}
-.mahi-svg.a-dance .m-root{animation:dance 1s ease-in-out 6}
-.mahi-svg.a-tilt .m-head{animation:tilt 1.6s ease-in-out 1}
-@keyframes jump{0%,100%{transform:none}30%{transform:translateY(-22px) scaleY(1.04)}60%{transform:translateY(0) scaleY(.94)}}
-@keyframes bounce{50%{transform:translateY(-8px)}}
-@keyframes dance{25%{transform:rotate(-8deg) translateY(-6px)}50%{transform:translateY(-12px)}75%{transform:rotate(8deg) translateY(-6px)}}
-@keyframes tilt{30%{transform:rotate(-9deg)}70%{transform:rotate(6deg)}}
-/* props */
-.typing-lines{animation:blinkline .8s steps(2) infinite}@keyframes blinkline{50%{opacity:.3}}
-.steam{animation:steam 2s ease-in-out infinite}@keyframes steam{50%{transform:translateY(-3px);opacity:.3}}
-.leafsway{transform-box:fill-box;transform-origin:bottom;animation:leaf 2.5s ease-in-out infinite}
-.drops{animation:drip 1s linear infinite}@keyframes drip{to{transform:translateY(12px);opacity:0}}
-.prop-cards .c1{animation:card 1.6s ease-in-out infinite}.prop-cards .c3{animation:card 1.6s .8s ease-in-out infinite}@keyframes card{50%{transform:translateY(-6px)}}
-.prop-clock .hand{transform-box:view-box;transform-origin:168px 86px;animation:clock 2s linear infinite}@keyframes clock{to{transform:rotate(360deg)}}
-.pen{animation:pen .5s ease-in-out infinite alternate}@keyframes pen{to{transform:translateX(-6px)}}
-.prop-headphones .mnote{animation:notes 2s ease-in-out infinite}.prop-headphones .n2{animation-delay:1s}@keyframes notes{50%{transform:translateY(-8px);opacity:.4}}
-.prop-zzz text{animation:zz 2.4s ease-in-out infinite}.prop-zzz .z2{animation-delay:.6s}.prop-zzz .z3{animation-delay:1.2s}@keyframes zz{0%{opacity:0;transform:translate(0,6px)}50%{opacity:1}100%{opacity:0;transform:translate(6px,-8px)}}
-.prop-sparkles path{transform-box:fill-box;transform-origin:center;animation:sparkle 1.2s ease-in-out infinite}.prop-sparkles .s2{animation-delay:.3s}.prop-sparkles .s3{animation-delay:.6s}.prop-sparkles .s4{animation-delay:.9s}
-@keyframes sparkle{50%{transform:scale(.3) rotate(45deg);opacity:.4}}
-.prop-play,.prop-poster,.prop-trophy,.prop-badge{animation:popin .45s cubic-bezier(.3,1.6,.5,1)}@keyframes popin{from{transform:translate(100px,190px) scale(0)}}
-.prop-play{transform-box:view-box}
-.fw{transform-box:fill-box;transform-origin:center;animation:fw 1.2s ease-out infinite}.fw.f2{animation-delay:.4s}.fw.f3{animation-delay:.8s}@keyframes fw{0%{transform:scale(.2);opacity:1}100%{transform:scale(1.4);opacity:0}}
-.acc-santa,.acc-party,.acc-jasmine{animation:popin2 .5s ease}@keyframes popin2{from{opacity:0;transform:translateY(-10px)}}
-.mahi-snow{position:absolute;inset:0;pointer-events:none;display:none}
-#mahi[data-festival=christmas] .mahi-snow{display:block;background-image:radial-gradient(#fff 1.4px,transparent 1.6px),radial-gradient(#fff 1px,transparent 1.2px);background-size:40px 40px,26px 26px;animation:snow 9s linear infinite;opacity:.8}
-@keyframes snow{to{background-position:0 400px,12px 300px}}
-/* paused / reduced motion */
-body.mahi-paused .mahi-svg *,body.reduced .mahi-svg *{animation-play-state:paused!important}
-body.reduced *,body.reduced *::before{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
-body.reduced .mahi-snow{display:none!important}
-@media (prefers-reduced-motion: reduce){.mahi-svg *{animation:none!important}.flow .edge.live{animation:none}}
+.mb-msg{font-weight:600;font-size:13px;line-height:1.4}.mb-detail{font-size:12px;color:var(--text-2);margin-top:4px;line-height:1.4}
+.mb-action{margin-top:8px;background:var(--accent);color:var(--text-on-accent,#fff);border:0;border-radius:var(--r-2,6px);padding:5px 10px;font:inherit;font-weight:600;cursor:pointer;font-size:12px}.mb-action:hover{background:var(--accent-hover)}
+.mb-close{position:absolute;top:4px;right:4px;width:22px;height:22px;border:0;background:none;cursor:pointer;color:var(--text-3);font-size:16px;line-height:1;border-radius:var(--r-1,4px)}.mb-close:hover{background:var(--surface-hover);color:var(--text)}
+/* never cover the asset editor: while #drawer is open MAHI shrinks to her title bar beside it (hidden on narrow screens) */
+body.drawer-open .mahi-dock{right:calc(min(520px,100vw) + 16px);width:132px}
+body.drawer-open .mahi-dock .md-body,body.drawer-open .mahi-dock .md-chat,body.drawer-open .mahi-dock .md-bar .icon-btn:not([data-m=hide]){display:none}
+body.drawer-open .mahi-dock .md-bar{border-bottom:0}
+@media (max-width:900px){body.drawer-open .mahi-dock{opacity:0;pointer-events:none;transform:translateY(16px)}}
+
+/* ---------- MAHI character animations (all names prefixed mh-) ---------- */
+.mahi-svg .mh-fade{animation:mh-fadein .35s ease both}
+@keyframes mh-fadein{from{opacity:0}to{opacity:1}}
+.mahi-svg .mh-ov{opacity:0;transition:opacity .3s}.mahi-svg .mh-ov.mh-on{opacity:1}
+.mh-ov.mh-on .mh-float{animation:mh-floatup 2.4s ease-in-out infinite}
+@keyframes mh-floatup{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.mh-ov.mh-on .mh-zz{animation:mh-zz 3s ease-in infinite;opacity:0}
+.mh-ov.mh-on .mh-zz:nth-child(2){animation-delay:1s}.mh-ov.mh-on .mh-zz:nth-child(3){animation-delay:2s}
+@keyframes mh-zz{0%{opacity:0;transform:translate(0,10px) scale(.6)}30%{opacity:1}100%{opacity:0;transform:translate(14px,-22px) scale(1.1)}}
+.mh-ov.mh-on .mh-tw{animation:mh-tw 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.mh-ov.mh-on .mh-tw:nth-child(2){animation-delay:.4s}.mh-ov.mh-on .mh-tw:nth-child(3){animation-delay:.8s}.mh-ov.mh-on .mh-tw:nth-child(4){animation-delay:1.2s}
+@keyframes mh-tw{0%,100%{opacity:.2;transform:scale(.6)}50%{opacity:1;transform:scale(1.15)}}
+.mh-ov.mh-on .mh-drip{animation:mh-drip 1.8s ease-in infinite}
+@keyframes mh-drip{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(22px);opacity:0}}
+.mh-ov.mh-on .mh-spin,.mahi-svg .mh-symspin{animation:mh-spin 1.2s linear infinite;transform-box:fill-box;transform-origin:center}
+@keyframes mh-spin{to{transform:rotate(360deg)}}
+.mh-ov.mh-on .mh-pulse{animation:mh-pulse 1.2s ease-out infinite;transform-box:fill-box;transform-origin:left center}
+.mh-ov.mh-on .mh-pulse:nth-child(2){animation-delay:.3s}.mh-ov.mh-on .mh-pulse:nth-child(3){animation-delay:.6s}
+@keyframes mh-pulse{0%{opacity:0;transform:scale(.6)}40%{opacity:1}100%{opacity:0;transform:scale(1.3)}}
+.mh-ov.mh-on .mh-burst rect{animation:mh-burst 1.4s ease-out infinite;transform-box:fill-box}
+@keyframes mh-burst{0%{transform:translate(0,0) rotate(0);opacity:1}100%{transform:translate(var(--dx),var(--dy)) rotate(220deg);opacity:0}}
+.mahi-svg .mh-bar{transform-box:fill-box;transform-origin:bottom;animation:mh-grow 2.4s ease-in-out infinite alternate}
+@keyframes mh-grow{from{transform:scaleY(.25)}to{transform:scaleY(1)}}
+.mahi-svg .mh-tick{stroke-dasharray:20;stroke-dashoffset:20;animation:mh-tick .5s ease forwards}
+@keyframes mh-tick{to{stroke-dashoffset:0}}
+.mahi-svg .mh-steam path{animation:mh-steam 2s ease-in-out infinite;opacity:0}.mahi-svg .mh-steam path:nth-child(2){animation-delay:.7s}
+@keyframes mh-steam{0%{opacity:0;transform:translateY(4px)}40%{opacity:.8}100%{opacity:0;transform:translateY(-10px)}}
+.mahi-svg .mh-flake{animation:mh-fall var(--d) linear infinite;animation-delay:var(--dl)}
+@keyframes mh-fall{from{transform:translate(var(--x),-20px)}to{transform:translate(calc(var(--x) + 30px),450px)}}
+.mahi-svg .mh-conf{animation:mh-conf var(--d) linear infinite;animation-delay:var(--dl);transform-box:fill-box}
+@keyframes mh-conf{from{transform:translate(var(--x),-20px) rotate(0)}to{transform:translate(calc(var(--x) - 20px),450px) rotate(540deg)}}
+.mahi-svg .mh-ball-bounce{animation:mh-bounce .9s cubic-bezier(.4,0,.6,1) infinite alternate}
+@keyframes mh-bounce{from{transform:translate(200px,4px)}to{transform:translate(200px,44px)}}
+.mahi-svg .mh-cball{animation:mh-cball 2.2s ease-in infinite}
+@keyframes mh-cball{0%{transform:translate(-20px,330px)}45%{transform:translate(252px,352px)}50%{transform:translate(258px,350px)}100%{transform:translate(430px,90px)}}
+.mahi-svg .mh-bball{animation:mh-bball 2.6s ease-in-out infinite}
+@keyframes mh-bball{0%{transform:translate(276px,330px)}50%{transform:translate(318px,40px)}75%{transform:translate(345px,118px)}100%{transform:translate(345px,200px);opacity:0}}
+.mahi-svg .mh-plane{animation:mh-plane 3.2s ease-in infinite}
+@keyframes mh-plane{0%{transform:translate(268px,330px) rotate(-10deg);opacity:1}100%{transform:translate(440px,30px) rotate(-30deg);opacity:.2}}
+.mahi-svg .mh-car{animation:mh-car 4.5s linear infinite}
+@keyframes mh-car{from{transform:translate(-70px,396px)}to{transform:translate(470px,396px)}}
+.mahi-svg .mh-note{animation:mh-note 2.6s ease-out infinite;opacity:0}
+@keyframes mh-note{0%{opacity:0;transform:translate(0,0)}20%{opacity:1}100%{opacity:0;transform:translate(16px,-60px)}}
+.mahi-svg .mh-wing{transform-box:fill-box;transform-origin:center;animation:mh-flap .25s ease-in-out infinite alternate}
+@keyframes mh-flap{to{transform:scaleX(.25)}}
+.mahi-svg .mh-bfly1{animation:mh-bf1 7s ease-in-out infinite}
+@keyframes mh-bf1{0%{transform:translate(90px,120px)}25%{transform:translate(150px,40px)}50%{transform:translate(260px,70px)}75%{transform:translate(320px,160px)}100%{transform:translate(90px,120px)}}
+.mahi-svg .mh-bfly2{animation:mh-bf2 8s ease-in-out infinite}
+@keyframes mh-bf2{0%{transform:translate(330px,90px)}30%{transform:translate(240px,30px)}60%{transform:translate(110px,80px)}100%{transform:translate(330px,90px)}}
+.mahi-svg .mh-sball{animation:mh-sball 2.4s ease-in infinite}
+@keyframes mh-sball{0%{transform:translate(132px,334px)}50%{transform:translate(240px,230px)}100%{transform:translate(334px,322px)}}
+.mahi-svg .mh-ring{animation:mh-ring 2.4s ease-in infinite;opacity:0}.mahi-svg .mh-ring:nth-child(2){animation-delay:.8s}.mahi-svg .mh-ring:nth-child(3){animation-delay:1.6s}
+@keyframes mh-ring{0%{transform:translate(272px,330px);opacity:1}50%{transform:translate(310px,280px)}100%{transform:translate(338px,368px);opacity:1}}
+.mahi-svg .mh-twinkle{animation:mh-tw2 1.4s ease-in-out infinite alternate}
+@keyframes mh-tw2{from{opacity:.35}to{opacity:1}}
+.mahi-svg .mh-orn{transform-box:fill-box;transform-origin:center;animation:mh-pop .5s ease both}
+@keyframes mh-pop{from{transform:scale(0)}to{transform:scale(1)}}
+.mahi-svg .mh-fw line{transform-box:fill-box;stroke-dasharray:22;stroke-dashoffset:22;animation:mh-fw 1.6s ease-out infinite}
+@keyframes mh-fw{0%{stroke-dashoffset:22;opacity:1}60%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:-22;opacity:0}}
+.mahi-svg .mh-draw{stroke-dasharray:400;stroke-dashoffset:400;animation:mh-draw 4s ease forwards infinite}
+@keyframes mh-draw{70%,100%{stroke-dashoffset:0}}
+.mahi-svg .mh-foam{transform-box:fill-box;transform-origin:bottom;animation:mh-foam 2.2s ease-in-out infinite alternate}
+@keyframes mh-foam{from{transform:scaleY(.3)}to{transform:scaleY(1.15)}}
+.mahi-svg .mh-flame{transform-box:fill-box;transform-origin:bottom;animation:mh-flame .35s ease-in-out infinite alternate}
+@keyframes mh-flame{from{transform:scale(.85,.9)}to{transform:scale(1.1,1.12)}}
+.mahi-svg .mh-drop{animation:mh-drop .9s ease-in infinite;opacity:0}.mahi-svg .mh-drop:nth-child(2){animation-delay:.3s}.mahi-svg .mh-drop:nth-child(3){animation-delay:.6s}
+@keyframes mh-drop{0%{opacity:0;transform:translate(0,0)}20%{opacity:1}100%{opacity:0;transform:translate(-14px,30px)}}
+.mahi-svg .mh-lid{transform-box:fill-box;transform-origin:bottom}.mahi-svg .mh-lid.mh-closing{animation:mh-close 1.4s ease forwards}
+@keyframes mh-close{to{transform:scaleY(.06)}}
+.mahi-svg .mh-pz{animation:mh-pz 2.4s ease-in-out infinite alternate}
+@keyframes mh-pz{from{transform:translate(30px,-12px)}to{transform:translate(0,0)}}
+.mahi-svg .mh-file{animation:mh-file 2.4s ease-in infinite;opacity:0}.mahi-svg .mh-file:nth-child(2){animation-delay:.8s}.mahi-svg .mh-file:nth-child(3){animation-delay:1.6s}
+@keyframes mh-file{0%{opacity:0;transform:translate(-40px,-50px)}30%{opacity:1}100%{opacity:1;transform:translate(0,0)}}
+.mahi-svg .mh-glowtext{paint-order:stroke;stroke:rgba(120,80,0,.35);stroke-width:3px}
+/* paused, tab hidden, reduced motion: CSS animations stop; props show their finished state */
+body.mahi-paused .mahi-svg *,body.page-hidden .mahi-svg *{animation-play-state:paused!important}
+body.reduced .mahi-svg *{animation:none!important;transition:none!important}
+body.reduced .mahi-svg .mh-tick,body.reduced .mahi-svg .mh-draw,body.reduced .mahi-svg .mh-fw line{stroke-dashoffset:0}
+body.reduced .mahi-svg .mh-zz,body.reduced .mahi-svg .mh-note,body.reduced .mahi-svg .mh-file,body.reduced .mahi-svg .mh-ring,body.reduced .mahi-svg .mh-steam path{opacity:1}
+body.reduced .mahi-svg .mh-flake,body.reduced .mahi-svg .mh-conf,body.reduced .mahi-svg .mh-burst,body.reduced .mahi-svg .mh-cball,body.reduced .mahi-svg .mh-bball,body.reduced .mahi-svg .mh-plane,body.reduced .mahi-svg .mh-car,body.reduced .mahi-svg .mh-sball,body.reduced .mahi-svg .mh-drop{display:none}
+@media (prefers-reduced-motion: reduce){
+  .mahi-svg *{animation:none!important;transition:none!important}.flow .edge.live{animation:none}
+  .mahi-svg .mh-tick,.mahi-svg .mh-draw,.mahi-svg .mh-fw line{stroke-dashoffset:0}
+  .mahi-svg .mh-zz,.mahi-svg .mh-note,.mahi-svg .mh-file,.mahi-svg .mh-ring,.mahi-svg .mh-steam path{opacity:1}
+  .mahi-svg .mh-flake,.mahi-svg .mh-conf,.mahi-svg .mh-burst,.mahi-svg .mh-cball,.mahi-svg .mh-bball,.mahi-svg .mh-plane,.mahi-svg .mh-car,.mahi-svg .mh-sball,.mahi-svg .mh-drop{display:none}
+}
 /* focus mode */
-body.focus-mode .sidebar{display:none}body.focus-mode .mahi-snow{display:none}
+body.focus-mode .sidebar{display:none}
 
 /* ---------- responsive ---------- */
 @media (max-width:1200px){.g-3{grid-template-columns:1fr 1fr}.g-3-2{grid-template-columns:1fr}.fest-row{grid-template-columns:1fr}}
 @media (max-width:900px){
   #menu{display:inline-grid}.sidebar{position:fixed;left:0;top:0;bottom:0;z-index:45;transform:translateX(-100%);transition:transform .25s}body.nav-open .sidebar{transform:none}
   .g-2,.g-3,.g-cal{grid-template-columns:1fr}#page{padding:16px 16px 260px}.tb-title .muted{display:none}
-  .mahi-dock{width:170px;right:10px;bottom:10px}.mahi-stage{height:150px}.mahi-bubble{right:0;bottom:calc(100% + 8px);width:min(300px,calc(100vw - 30px))}
   .set-grid{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}.cal-cell{min-height:70px}.att-row{grid-template-columns:100px 1fr auto}
 }
 /* ---------- print ---------- */
@@ -374,3 +401,46 @@ body.focus-mode .sidebar{display:none}body.focus-mode .mahi-snow{display:none}
 }
 .fnode.pending .fn-badge rect{fill:var(--track)}.fnode.pending .fn-badge text{fill:var(--muted)}
 .save-state{background:none;border:0;cursor:pointer;font:inherit;font-size:11px}.save-state.cloud{color:#1E6FD9}.save-state.busy{color:var(--warn)}
+
+/* ===================== MAHI dock: chat, phones, page room (character v2) ===================== */
+.mahi-dock.chat-open{width:340px}
+.mahi-dock.chat-open .mahi-stage{height:150px}
+.mahi-dock.chat-open .mahi-bubble{display:none} /* the chat already shows MAHI's reply */
+.md-chat{display:flex;flex-direction:column;gap:6px;padding:8px;border-top:1px solid var(--border,var(--line))}
+.md-chat[hidden]{display:none}
+.mc-log{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;font-size:12.5px;overscroll-behavior:contain}
+.mc-msg{padding:7px 10px;border-radius:var(--r-3,8px);max-width:92%;line-height:1.4;overflow-wrap:anywhere}
+.mc-msg.mahi{background:var(--bg-sunken);border:1px solid var(--border,var(--line));align-self:flex-start;border-bottom-left-radius:var(--r-1,4px)}
+.mc-msg.me{background:var(--accent);color:var(--text-on-accent,#fff);align-self:flex-end;border-bottom-right-radius:var(--r-1,4px)}
+.mc-msg ul{margin:4px 0 0;padding-left:16px}.mc-confirm{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.mc-chips{display:flex;flex-wrap:wrap;gap:4px}.mc-chips button{font:inherit;font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--border,var(--line));background:var(--surface,var(--panel));color:var(--text-2);cursor:pointer}.mc-chips button:hover{background:var(--surface-hover);color:var(--text)}
+.mc-form{display:flex;gap:6px}.mc-form input{flex:1;min-width:0;padding:7px 9px;border:1px solid var(--border,var(--line));border-radius:var(--r-2,6px);background:var(--surface,var(--panel));color:inherit;font:inherit;font-size:13px}
+.mr-item{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:12px}
+/* Report to MAHI box on My Day */
+.mr-form{display:flex;gap:8px;align-items:flex-start}.mr-form textarea{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--panel);color:inherit;resize:vertical}
+.mr-preview{display:flex;flex-direction:column;gap:8px;margin-top:10px}.mr-group{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.mr-hist{margin-top:8px}.mr-hrow{padding:3px 0}
+/* leave room at the bottom of every page so the dock never hides the last row */
+#page{padding-bottom:max(24px,var(--dock-room,250px))}
+@media (max-width:900px){
+  .mahi-dock{width:200px;right:10px;bottom:10px}.mahi-stage{height:160px}
+  .mahi-bubble{right:0;bottom:calc(100% + 8px);width:min(300px,calc(100vw - 30px))}
+}
+@media (max-width:720px){
+  .mahi-dock{width:196px}.md-bar .icon-btn{width:22px}
+  .mahi-dock:not(.chat-open) [data-m=voice],.mahi-dock:not(.chat-open) [data-m=sound]{display:none}
+  .mahi-dock.chat-open{width:auto;left:10px;right:10px}
+  .mahi-dock.chat-open .mahi-stage{height:110px}
+  .mc-log{max-height:38vh}
+  #page{--dock-room:90px}
+  .mr-form{flex-direction:column}.mr-form .btn{align-self:flex-end}
+}
+/* phones (≤390px): compact companion; app.js starts her minimised on small screens */
+@media (max-width:390px){
+  .mahi-dock{width:164px;right:8px;bottom:8px}.mahi-dock.min{width:120px}
+  .mahi-stage{height:132px}
+  .mahi-dock:not(.chat-open) [data-m=pause]{display:none}
+  .mahi-dock.chat-open{left:8px;right:8px}
+  .mahi-dock.chat-open .mahi-stage{height:96px}
+}
+@media (max-width:720px){.mr-form{align-items:stretch}.mr-form textarea{width:100%;min-height:64px}}

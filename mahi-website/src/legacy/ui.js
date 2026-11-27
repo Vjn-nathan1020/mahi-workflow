@@ -116,12 +116,12 @@
         ${fld('pubRemarks', 'Publishing Remarks', 'textarea', { rows: 2 })}
         <p class="muted small">Set publishing window: ${UI.fmt(S.state.settings.pubWindows[a.set].start)} → ${UI.fmt(S.state.settings.pubWindows[a.set].end)}</p>
         <h4>Additional platform logs <span class="muted small">(never counted as extra production)</span></h4>
-        <div class="loglist">${logs.map((l) => `<div class="logrow"><b>${esc(l.platform)}</b> ${UI.fmt(l.date)} ${esc(l.time || '')} · ${esc(l.status)} ${l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">link</a>` : ''}<button type="button" class="icon-btn" data-dellog="${l.id}" aria-label="Delete log">🗑</button></div>`).join('') || '<p class="muted small">No extra platform posts logged.</p>'}</div>
+        <div class="loglist">${logs.map((l) => `<div class="logrow"><b>${esc(l.platform)}</b> ${UI.fmt(l.date)} ${esc(l.time || '')} · ${esc(l.status)} ${UI.safeUrl(l.url) ? `<a href="${esc(UI.safeUrl(l.url))}" target="_blank" rel="noopener noreferrer">link</a>` : ''}<button type="button" class="icon-btn" data-dellog="${l.id}" aria-label="Delete log">🗑</button></div>`).join('') || '<p class="muted small">No extra platform posts logged.</p>'}</div>
         <div class="addlog"><select data-lp>${UI.options(D.PLATFORMS)}</select><input type="date" data-ld value="${S.today()}"><select data-ls>${UI.options(D.PUB_STATUSES, 'Published')}</select><input data-lu placeholder="URL"><button type="button" class="btn small" data-addlog>Add log</button></div>
       </section>
     </form>
     <div class="drawer-f"><button class="btn" data-save>Save changes</button><button class="btn ghost" data-quick="Completed">Mark Completed</button><button class="btn ghost" data-close>Cancel</button></div>`;
-    dr.classList.add('open'); UI.$('#scrim').classList.add('show');
+    dr.classList.add('open'); UI.$('#scrim').classList.add('show'); document.body.classList.add('drawer-open');
     const form = dr.querySelector('form');
     const switchTab = (t) => { UI.$$('[data-tab]', dr).forEach((b) => b.classList.toggle('on', b.dataset.tab === t)); UI.$$('[data-pane]', dr).forEach((p) => { p.hidden = p.dataset.pane !== t; }); };
     if (tab) switchTab(tab);
@@ -142,7 +142,10 @@
       }
     };
   };
-  UI.closeDrawer = () => { UI.$('#drawer').classList.remove('open'); UI.$('#scrim').classList.remove('show'); };
+  // While the record editor is open the MAHI companion steps aside, so it never covers the editor's buttons.
+  UI.closeDrawer = () => { UI.$('#drawer').classList.remove('open'); UI.$('#scrim').classList.remove('show'); document.body.classList.remove('drawer-open'); };
+  // Only http(s) links are ever rendered as clickable links.
+  UI.safeUrl = (u) => { const s = String(u || '').trim(); return /^https?:\/\//i.test(s) ? s : ''; };
 
   // Shared guarded status change (inline selects, kanban, bulk)
   UI.changeAssets = async (ids, patch) => {
