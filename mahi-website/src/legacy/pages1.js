@@ -12,22 +12,68 @@
   // ================= HOME =================
   P.home = (el) => {
     const st = S.state, s = st.settings, m = S.metrics();
-    const cur = m.current, cs = m.currentStats;
-    const mode = s.boardMode || 'corporate';
-    const festNext = D.FESTIVALS.find((f) => (f.dateEnd || f.date) >= m.today);
-    const daysTo = festNext ? D.daysBetween(m.today, festNext.date) : null;
-    const head = `<div class="hero">
-      <div class="hero-id">${UI.avatar(s.ownerPic, s.owner, 'lg')}<div><div class="muted small">${greeting()}, ${esc(s.callName)} · ${new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div><h2>${esc(s.owner)}'s Command Center</h2>
-      <div class="hero-chips">${cur ? `<span class="chip big" style="--c:${UI.festColor(cur.festival)}">Current: ${cur.label} · ${cur.festival}</span>` : '<span class="chip big">Festival phase complete</span>'}${cur && cur.compressed ? '<span class="chip big warn">⚠ Compressed schedule</span>' : ''}${festNext ? `<span class="chip big ghost">${esc(festNext.name)} in ${daysTo} day${daysTo === 1 ? '' : 's'}</span>` : ''}</div></div></div>
-      <div class="seg" role="group" aria-label="View mode"><button data-mode="corporate" class="${mode === 'corporate' ? 'on' : ''}">Corporate Dashboard</button><button data-mode="cork" class="${mode === 'cork' ? 'on' : ''}">Digital Corkboard</button></div></div>`;
-    el.innerHTML = head + (mode === 'cork' ? cork(m) : corporate(m));
-    el.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => S.setSettings({ boardMode: b.dataset.mode }));
+    const mode = s.boardMode === 'cork' ? 'cork' : 'overview';
+    const seg = '<div class="seg ov-seg" role="group" aria-label="View"><button data-mode="overview" class="' + (mode === 'overview' ? 'on' : '') + '">Overview</button><button data-mode="cork" class="' + (mode === 'cork' ? 'on' : '') + '">Corkboard</button></div>';
+    el.innerHTML = mode === 'cork' ? '<div class="page-h"><h2>Corkboard</h2>' + seg + '</div>' + cork(m) : overview(m, seg);
+    el.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => S.setSettings({ boardMode: b.dataset.mode === 'cork' ? 'cork' : 'overview' }));
+    const det = el.querySelector('#ov-details'); if (det) det.ontoggle = () => S.setSettings({ homeDetails: det.open });
     const addSticky = el.querySelector('[data-addsticky]');
     if (addSticky) addSticky.onclick = async () => {
       const v = await UI.modal('New sticky note', '<label class="f"><span>Title</span><input id="sn-t"></label><label class="f"><span>Note</span><textarea id="sn-x" rows="3"></textarea></label>', [{ label: 'Pin it', value: (w) => ({ t: w.querySelector('#sn-t').value, x: w.querySelector('#sn-x').value }) }, { label: 'Cancel', value: null }]);
       if (v && (v.t || v.x)) S.addNote({ title: v.t || 'Sticky', text: v.x, pinned: true, category: 'Sticky' });
     };
   };
+
+  // ---- Overview (V2 layout): greeting, one overview strip, priorities, campaign table, right rail, brands ----
+  const fmtD = (iso, o) => new Date(iso + 'T00:00:00+05:30').toLocaleDateString('en-IN', Object.assign({ timeZone: 'Asia/Kolkata' }, o || { weekday: 'short', day: 'numeric', month: 'short' }));
+  const istGreeting = () => { const h = D.istHM(new Date())[0]; return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+  const bar = (p, c) => '<span class="ov-bar"><i style="width:' + Math.round(Math.max(0, Math.min(1, p || 0)) * 100) + '%;' + (c ? 'background:' + c : '') + '"></i></span>';
+  const typeVar = { 'Poster': 'var(--viz-1)', 'AI Video': 'var(--viz-2)', 'VJ Video': 'var(--viz-3)' };
+  function overview(m, seg) {
+    const st = S.state, s = st.settings, cur = m.current, cs = m.currentStats, T = m.byType;
+    const ws = D.weekStart(m.today), weekDone = st.assets.filter((x) => D.isDone(x) && x.completionDate >= ws && x.completionDate <= m.today).length
+      + st.customTasks.filter((x) => x.status === 'Completed' && (x.completedOn || '') >= ws && (x.completedOn || '') <= m.today).length;
+    const todayDone = m.todayCompleted.length + st.customTasks.filter((x) => x.status === 'Completed' && x.completedOn === m.today).length;
+    const dayN = cur ? D.daysBetween(cur.start, m.today) + 1 : 0, dayTotal = cur ? D.daysBetween(cur.start, cur.end) + 1 : 0, left = cur ? D.daysBetween(m.today, cur.end) : 0;
+    const remainingCur = cs ? cs.target - cs.done : 0, pace = cur && left >= 0 ? Math.ceil(remainingCur / (left + 1)) : 0;
+    const head = '<div class="ov-head"><div><h2>' + istGreeting() + ', ' + esc(s.callName) + '</h2><div class="ov-meta"><span>' + fmtD(m.today, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</span>'
+      + (cur ? '<span>Active campaign: <b>' + esc(cur.festival) + ' · ' + esc(cur.label) + '</b></span><span>Day ' + dayN + ' of ' + dayTotal + ' · ends ' + fmtD(cur.end) + '</span>' : '<span>No production set running today</span>') + '</div>'
+      + '<div class="ov-actions"><button class="btn" data-route="myday">Open My Day</button>' + seg + '</div></div></div>';
+    const strip = '<section class="ov-strip" aria-label="Overview">'
+      + '<div class="ov-cell wide"><span class="ov-l">Overall production</span><span class="ov-v">' + m.done + '<small> of ' + m.total + ' deliverables · ' + UI.pct(m.pct) + '</small></span>' + bar(m.pct, 'var(--accent)')
+      + '<span class="ov-split">' + D.CONTENT_TYPES.map((k) => '<span><i style="background:' + typeVar[k] + '"></i>' + (k === 'Poster' ? 'Posters' : k + 's') + ' <b>' + T[k].done + '/' + T[k].target + '</b></span>').join('') + '</span></div>'
+      + '<div class="ov-cell" data-route="myday"><span class="ov-l">Completed today</span><span class="ov-v">' + todayDone + '</span><span class="ov-s">' + (cur ? 'Pace needed: ' + pace + ' / day' : 'deliverables + personal tasks') + '</span></div>'
+      + '<div class="ov-cell" data-route="reports"><span class="ov-l">This week</span><span class="ov-v">' + weekDone + (cs ? '<small> / ' + cs.target + '</small>' : '') + '</span><span class="ov-s">' + (cur ? esc(cur.label) + ' · due ' + fmtD(cur.end) : 'completed since Monday') + '</span></div>'
+      + '<div class="ov-cell" data-route="production?done=0"><span class="ov-l">Pending</span><span class="ov-v">' + m.pending + '</span><span class="ov-s">' + (cs ? (cs.target - cs.done) + ' in the active set' : 'across all sets') + '</span></div>'
+      + '<div class="ov-cell" data-route="' + (m.overdue.length ? 'production?flag=OVERDUE' : 'calendar') + '"><span class="ov-l">' + (m.overdue.length ? 'Overdue' : 'Next deadline') + '</span><span class="ov-v' + (m.overdue.length ? ' bad' : '') + '">' + (m.overdue.length ? m.overdue.length : cur ? left + '<small> day' + (left === 1 ? '' : 's') + '</small>' : '—') + '</span><span class="ov-s">' + (m.overdue.length ? 'needs attention' : cur ? esc(cur.label) + ' · ' + fmtD(cur.end) : '') + '</span></div></section>';
+    // today's priorities: open work in the active set, overdue first, then in-progress, then plan order
+    const rank = (x) => (x.__flag === 'OVERDUE' ? 0 : x.status !== 'Not Started' ? 1 : 2);
+    const pr = cur ? st.assets.filter((x) => x.set === cur.code && !D.isDone(x)).sort((x, y) => rank(x) - rank(y) || x.deadline.localeCompare(y.deadline)).slice(0, 7) : [];
+    const typeLabel = { 'Poster': 'poster', 'AI Video': 'AI video', 'VJ Video': 'VJ video' };
+    const prio = '<section class="card ov-list"><div class="card-h"><h3>Today’s priorities <span class="muted small">' + (cur ? 'Open work in ' + esc(cur.label) + ', overdue and started first' : '') + '</span></h3><button class="link" data-route="myday">My Day</button></div>'
+      + (pr.length ? pr.map((x) => '<button class="ov-row" data-edit="' + x.id + '"><span class="ov-id">' + x.id + '</span><span class="ov-what"><b>' + esc(x.brand) + '</b> · ' + typeLabel[x.type] + ' ' + x.num + '</span><span class="muted small">' + fmtD(x.deadline) + '</span>' + UI.statusChip(x.status) + '</button>').join('')
+        + '<div class="ov-foot"><span class="muted small">' + pr.length + ' of ' + (cs ? cs.target - cs.done : 0) + ' open in ' + (cur ? esc(cur.label) : '') + '</span><button class="link" data-route="production?set=' + (cur ? cur.code : '') + '">Open all tasks</button></div>'
+        : '<p class="ov-empty">' + (cur ? 'Everything in ' + esc(cur.label) + ' is complete.' : 'No production set is running today.') + '</p>') + '</section>';
+    const sets = '<section class="card ov-table"><div class="card-h"><h3>Campaign progress by set</h3><span class="muted small">' + D.SETS.length + ' sets · ' + m.total + ' deliverables</span></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Set</th><th>Festival</th><th>Production</th><th>Posters</th><th>AI</th><th>VJ</th><th>Completion</th><th>Status</th></tr></thead><tbody>'
+      + D.SETS.map((z) => { const x = m.bySet[z.code]; const g = (k) => { const a = st.assets.filter((q) => q.set === z.code && q.type === k); return a.filter(D.isDone).length + '/' + a.length; };
+        const status = m.today < z.start ? 'Starts ' + fmtD(z.start) : m.today > z.end ? (x.done === x.target ? 'Complete' : 'Ended · ' + (x.target - x.done) + ' open') : 'Active · day ' + (D.daysBetween(z.start, m.today) + 1);
+        return '<tr data-route="sets?set=' + z.code + '"><td>' + z.label + '</td><td><span class="ov-dot" style="background:' + UI.festColor(z.festival) + '"></span>' + esc(z.festival) + '</td><td>' + fmtD(z.start, { day: 'numeric', month: 'short' }) + ' – ' + fmtD(z.end, { day: 'numeric', month: 'short' }) + '</td><td>' + g('Poster') + '</td><td>' + g('AI Video') + '</td><td>' + g('VJ Video') + '</td><td class="ov-pc">' + bar(x.pct) + '<span>' + x.done + '/' + x.target + '</span></td><td class="' + (status.startsWith('Active') ? 'ov-active' : 'muted') + '">' + status + '</td></tr>'; }).join('')
+      + '</tbody></table></div></section>';
+    // right rail
+    const dl = D.SETS.filter((z) => z.end >= m.today).slice(0, 5).map((z) => { const x = m.bySet[z.code], d = D.daysBetween(m.today, z.end); return '<button class="ov-dl" data-route="sets?set=' + z.code + '"><span class="ov-date"><small>' + fmtD(z.end, { month: 'short' }).toUpperCase() + '</small>' + Number(z.end.slice(8, 10)) + '</span><span><b>' + z.label + ' · ' + esc(z.festival) + '</b><span class="muted small">' + (x.target - x.done) + ' open of ' + x.target + '</span></span><span class="ov-days' + (d <= 3 ? ' soon' : '') + '">' + d + ' day' + (d === 1 ? '' : 's') + '</span></button>'; }).join('') || '<p class="ov-empty">No upcoming set deadlines.</p>';
+    const appr = m.underReview.length ? m.underReview.slice(0, 5).map((x) => '<button class="ov-mini" data-edit="' + x.id + '"><span>' + x.id + '</span><span class="muted small">' + esc(x.brand) + '</span></button>').join('') + (m.underReview.length > 5 ? '<button class="link" data-route="board?status=Under Review">All ' + m.underReview.length + '</button>' : '') : '<p class="ov-empty">Nothing waiting for review.</p>';
+    const hist = st.history.slice(-6).reverse().filter((h) => h.id && h.field);
+    const act = hist.length ? hist.map((h) => '<div class="ov-act"><span>' + esc(h.id) + ' · ' + esc(h.field) + ' → <b>' + esc(String(h.to).slice(0, 40)) + '</b></span><span class="muted small">' + new Date(h.ts).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</span></div>').join('') : '<p class="ov-empty">No activity yet. Status changes appear here.</p>';
+    const rail = '<aside class="card ov-rail"><div class="card-h"><h3>Upcoming deadlines</h3><button class="link" data-route="calendar">Calendar</button></div>' + dl
+      + '<div class="ov-sep"></div><div class="card-h"><h3>Awaiting approval <span class="ov-count">' + m.underReview.length + '</span></h3></div>' + appr
+      + '<div class="ov-sep"></div><div class="card-h"><h3>Recent activity</h3></div>' + act + '</aside>';
+    // brands in the active set + VJ load
+    const brands = cur ? '<section class="card"><div class="card-h"><h3>Brands · ' + esc(cur.label) + '</h3><button class="link" data-route="brands">All brands</button></div><div class="ov-brands">'
+      + D.BRANDS.map((b) => { const x = m.byBrandSet[cur.code + '|' + b.name]; return '<button class="ov-brand" data-route="production?set=' + cur.code + '&brand=' + encodeURIComponent(b.name) + '"><span class="ov-bn">' + esc(b.name) + '</span><span class="muted small">' + b.posters + ' P · ' + b.ai + ' AI · ' + b.vj + ' VJ</span>' + bar(x.pct) + '<span class="ov-bc' + (x.overdue ? ' bad' : '') + '">' + x.done + '/' + x.target + '</span></button>'; }).join('') + '</div></section>' : '';
+    const vjs = '<section class="card"><div class="card-h"><h3>VJ videos</h3><span class="muted small">' + T['VJ Video'].done + '/' + T['VJ Video'].target + ' done</span></div>' + s.vjs.map((v, i) => { const x = m.byVJ[v.id] || { done: 0, target: 0, pct: 0, overdue: 0 }; return '<button class="ov-vj" data-route="vj' + (i + 1) + '"><b>' + esc(v.name === v.id ? v.id : v.id + ' · ' + v.name) + '</b><span class="muted small">' + D.BRANDS.filter((b) => b.vjMember === v.id).map((b) => esc(b.name)).join(', ') + '</span>' + bar(x.pct, 'var(--viz-3)') + '<span class="ov-bc">' + x.done + '/' + x.target + '</span></button>'; }).join('') + '</section>';
+    const details = '<details class="ov-details" id="ov-details"' + (s.homeDetails ? ' open' : '') + '><summary>Detailed figures</summary>' + corporate(m) + '</details>';
+    return head + strip + '<div class="ov-main"><div class="ov-col">' + prio + sets + brands + '</div><div class="ov-side">' + rail + vjs + '</div></div>' + details;
+  }
 
   function corporate(m) {
     const st = S.state, cur = m.current, cs = m.currentStats;
@@ -67,7 +113,7 @@
     return `<div class="kpi-grid">${kpis}</div>
     <div class="grid g-3-2">${card('Festival Campaign Progress', `<div class="fest-row">${fests}</div>`)}${card('Overall Production Progress', CH.donut([{ label: 'Completed', value: m.done, color: '#2E9E4F', click: 'production?done=1' }, { label: 'Pending', value: m.pending, color: '#C9CFD6', click: 'production?done=0' }], { center: UI.pct(m.pct), sub: `${m.done} / ${m.total}` }))}</div>
     <div class="grid g-2">${card('Current Production Set', csCard, { route: cur ? 'sets?set=' + cur.code : 'sets' })}${card('VJ Monitoring', `<div class="vj-col">${vjs}</div>`)}</div>
-    <div class="grid g-3">${card('Seven-Set Completion', setBars)}${card(cur ? `Brands needing attention · ${cur.label}` : 'Brands', attention || '<p class="muted">—</p>')}${card('Upcoming Deadlines', upList)}</div>`;
+    <div class="grid g-3">${card('Set Completion', setBars)}${card(cur ? `Brands needing attention · ${cur.label}` : 'Brands', attention || '<p class="muted">—</p>')}${card('Upcoming Deadlines', upList)}</div>`;
   }
 
   function cork(m) {
@@ -77,7 +123,7 @@
     const timelines = D.FESTIVALS.map((f) => `<div class="tl-strip"><b style="color:${f.colors[0]}">${f.name}</b>${D.SETS.filter((s) => s.festival === f.name).map((s) => { const x = m.bySet[s.code]; return `<span class="tl-card ${s.compressed ? 'comp' : ''}" data-route="sets?set=${s.code}" title="${s.label}: ${UI.fmt(s.start)} → ${UI.fmt(s.end)}">${s.label}<small>${UI.fmt(s.start).slice(0, 5)}–${UI.fmt(s.end).slice(0, 5)}</small><em>${UI.pct(x.pct)}</em></span>`; }).join('<i class="tl-arrow">→</i>')}</div>`).join('');
     const sets = D.SETS.map((s, i) => { const x = m.bySet[s.code]; return pin(`<div class="pc-t">${s.label}</div><div class="small">${s.festival}${s.compressed ? ' · ⚠ compressed' : ''}</div><div class="small">${UI.fmt(s.start)} → ${UI.fmt(s.end)}</div><div class="pc-big">${x.done}/${x.target}</div>${CH.progress(x.pct, '#1B5E20')}${x.overdue ? `<div class="bad-t small">${x.overdue} overdue</div>` : ''}`, 'sticky s' + (i % 4), 'sets?set=' + s.code, ((i * 37) % 7) - 3); }).join('');
     const brandTbl = `<table class="mini-t"><thead><tr><th>Brand</th><th>P</th><th>AI</th><th>VJ</th><th>Done</th></tr></thead><tbody>${D.BRANDS.map((b) => { const x = m.byBrand[b.name]; return `<tr data-route="production?brand=${encodeURIComponent(b.name)}"><td>${esc(b.name)}</td><td>${b.posters}</td><td>${b.ai}</td><td>${b.vj}</td><td>${x.done}/${x.target}</td></tr>`; }).join('')}</tbody></table>`;
-    const totals = pin(`<div class="pc-t">Festival Totals</div><div class="tot"><span style="color:#2E9E4F">Posters <b>${m.byType['Poster'].done}/434</b></span><span style="color:#1E6FD9">AI Videos <b>${m.byType['AI Video'].done}/98</b></span><span style="color:#7E57C2">VJ Videos <b>${m.byType['VJ Video'].done}/84</b></span><span>All <b>${m.done}/${m.total}</b></span></div>`, 'paper', 'reports', 1.5);
+    const totals = pin(`<div class="pc-t">Festival Totals</div><div class="tot"><span style="color:#2E9E4F">Posters <b>${m.byType['Poster'].done}/${m.byType['Poster'].total}</b></span><span style="color:#1E6FD9">AI Videos <b>${m.byType['AI Video'].done}/${m.byType['AI Video'].total}</b></span><span style="color:#7E57C2">VJ Videos <b>${m.byType['VJ Video'].done}/${m.byType['VJ Video'].total}</b></span><span>All <b>${m.done}/${m.total}</b></span></div>`, 'paper', 'reports', 1.5);
     const vjs = st.settings.vjs.map((v, i) => { const x = m.byVJ[v.id]; return pin(`<div class="pc-t">${UI.avatar(v.pic, v.name, 'sm')} ${esc(v.name)}</div><div class="small">${D.BRANDS.filter((b) => b.vjMember === v.id).map((b) => b.name).join(', ')}</div><div class="pc-big">${x.done}/${x.target}</div>${CH.progress(x.pct, '#7E57C2')}`, 'index', 'vj' + (i + 1), [2, -1.5, 1][i]); }).join('');
     const dl = pin(`<div class="pc-t">⏰ Deadline reminders</div>${m.overdue.length ? `<div class="bad-t"><b>${m.overdue.length}</b> overdue</div>` : '<div>No overdue work</div>'}<div><b>${m.dueSoon.length}</b> due soon</div>${m.current ? `<div class="small">${m.current.label} deadline ${UI.fmt(m.current.end)}</div>` : ''}`, 'sticky s3', 'production?flag=OVERDUE', -2.5);
     const weekStart = D.addDays(m.today, -((new Date().getDay() + 6) % 7));
@@ -110,17 +156,32 @@
     const tasksDone = tasks.filter((x) => x.status === 'Completed');
     const planned = active.length + tasks.length, completed = active.filter(D.isDone).length + tasksDone.length;
     const pct = planned ? completed / planned : 0;
+    const pf = S.performance(t); // permanent IST day/week/month/year totals for the viewed day
+    // ---- Report to MAHI (plain-language work report → checked → saved to the real records) ----
+    const R = root.MAHI_REPORT, rp = myDayState.report;
+    const recent = (st.mahiReports || []).filter((r) => !r.undone).slice(0, 5);
+    const preview = !rp ? '' : `<div class="mr-preview">
+      ${rp.plan.warnings.map((x) => `<div class="alert warn small">${esc(x)}</div>`).join('')}
+      ${rp.plan.items.length || rp.plan.tasks.length ? `<p class="small"><b>MAHI understood:</b></p>
+      ${rp.plan.items.map((it) => `<div class="mr-group"><div class="small"><b>${esc(it.label)}</b>${it.shortfall ? ` <span class="chip flag over">${it.shortfall} not available</span>` : ''}</div>${it.picked.map((id) => { const a = S.asset(id); return `<label class="mr-item"><input type="checkbox" data-mr-id="${id}" checked> <span class="arow-id">${esc(id)}</span> <span class="muted small">${esc(a.brand)} · ${esc(D.setByCode(a.set).label)} · due ${UI.fmt(a.deadline)} · ${esc(a.status)}</span></label>`; }).join('')}</div>`).join('')}
+      ${rp.plan.tasks.length ? `<div class="mr-group"><div class="small"><b>Other work, saved as completed personal tasks (${rp.plan.tasks.length})</b></div>${rp.plan.tasks.map((x) => `<div class="mr-item small">✔ ${esc(x.title)}</div>`).join('')}</div>` : ''}
+      <div class="row-gap"><button class="btn" data-mr-save>Save as completed today</button><button class="btn ghost" data-mr-cancel>Cancel</button></div>` : '<div class="row-gap"><button class="btn ghost" data-mr-cancel>Clear</button></div>'}</div>`;
+    const reportCard = card('💬 Report to MAHI', `<form id="mr-form" class="mr-form"><textarea id="mr-text" rows="2" aria-label="Tell MAHI what you completed" placeholder='Tell MAHI what you finished, e.g. "I completed five posters today" or "Finished 2 AI videos for Valluvam and 1 SEO blog"'>${esc((rp && rp.text) || myDayState.reportDraft || '')}</textarea><button class="btn">Check</button></form>
+      ${isToday ? '' : '<p class="muted small">Reports are always saved for today (IST), whichever day you are viewing.</p>'}${preview}
+      ${recent.length ? `<details class="mr-hist"><summary class="small">Recent reports (${recent.length})</summary>${recent.map((r) => `<div class="mr-hrow small"><span class="muted">${UI.fmt(r.date)}</span> “${esc(r.text.slice(0, 90))}” → ${r.deliverables.length} deliverable(s), ${r.tasks.length} task(s) <button class="link" data-mr-undo="${r.id}">Undo</button></div>`).join('')}</details>` : ''}`);
     const list = (arr, empty, max) => arr.length ? `<div class="alist">${arr.slice(0, max || 12).map((a) => `<div class="arow"><button class="chk" data-done="${a.id}" title="Mark Completed" aria-label="Mark ${a.id} completed">${D.isDone(a) ? '✔' : ''}</button><span class="arow-id" data-edit="${a.id}">${esc(a.id)}</span>${UI.typeChip(a.type)}<span class="muted small">${esc(a.brand)}</span>${UI.statusChip(a.status)}${UI.flagChip(a.__flag || D.deadlineFlag(a, new Date(), st.settings.thresholds))}</div>`).join('')}${arr.length > (max || 12) ? `<button class="link" data-route="production?active=${t}">+ ${arr.length - (max || 12)} more…</button>` : ''}</div>` : `<p class="muted">${empty}</p>`;
     const byType = (tp) => activeOpen.filter((a) => a.type === tp);
     const notes = st.notes.slice(0, 4);
     el.innerHTML = `<div class="page-h"><div><h2>MY DAY</h2><div class="muted">${new Date(t.replace(/-/g, '/')).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${isToday ? ' · today' : ''}</div></div>
       <div class="row-gap"><button class="btn ghost" data-shift="-1">◀</button><input type="date" id="md-date" value="${t}"><button class="btn ghost" data-shift="1">▶</button><button class="btn ghost" data-today>Today</button><button class="btn" data-summary>MAHI summary</button></div></div>
-      <div class="kpi-grid sm">${kpi('Planned today', planned, `${active.length} production · ${tasks.length} personal`)}${kpi('Completed', completed, '', null, 'good')}${kpi('Remaining', planned - completed)}${kpi('Daily completion', UI.pct(pct), '', null, 'good')}${kpi('Previous pending', prevPending.length, 'overdue', 'production?flag=OVERDUE', prevPending.length ? 'bad' : '')}${kpi('Due in 3 days', upcoming.length, '', 'production?flag=DUE')}</div>
+      ${reportCard}
+      <div class="kpi-grid sm">${kpi('Planned today', planned, `${active.length} production · ${tasks.length} personal`)}${kpi('Planned & done', completed, '', null, 'good')}${kpi('Remaining', planned - completed)}${kpi('Daily completion', UI.pct(pct), '', null, 'good')}${kpi('Previous pending', prevPending.length, 'overdue', 'production?flag=OVERDUE', prevPending.length ? 'bad' : '')}${kpi('Due in 3 days', upcoming.length, '', 'production?flag=DUE')}</div>
       ${CH.progress(pct, '#2E9E4F', `${completed}/${planned} done`)}
+      <div class="kpi-grid sm">${[['Completed this day', pf.day], ['Previous day', pf.yesterday], ['This week (Mon–Sun)', pf.week], ['This month', pf.month], ['This year', pf.year], ['All time', pf.all]].map(([l, v]) => kpi(l, v.total, `${v.deliverables} deliverables · ${v.tasks} tasks`)).join('')}</div>
       <div class="grid g-3">${card(`<span style="color:#2E9E4F">●</span> Poster assignments (${byType('Poster').length})`, list(byType('Poster'), 'No open poster work in production today.'))}${card(`<span style="color:#1E6FD9">●</span> AI video assignments (${byType('AI Video').length})`, list(byType('AI Video'), 'No open AI video work in production today.'))}${card(`<span style="color:#7E57C2">●</span> VJ video assignments (${byType('VJ Video').length})`, list(byType('VJ Video'), 'No open VJ video work in production today.'))}</div>
       <div class="grid g-2">${card('My personal tasks', `<form class="task-add" id="task-add"><input name="title" placeholder="Add a personal task…" required><select name="priority">${UI.options(D.PRIORITIES, 'Medium')}</select><input name="reminder" type="time" title="Reminder time"><input name="linkedId" placeholder="Link Content ID (optional)" list="ids-dl"><button class="btn">Add</button></form>
         <p class="muted small">Personal tasks are tracked separately and never change the ${st.assets.length}-deliverable festival target.</p>
-        <div class="tlist">${tasks.map((x) => `<div class="trow ${x.status === 'Completed' ? 'done' : ''}"><button class="chk" data-tdone="${x.id}" aria-label="Toggle task">${x.status === 'Completed' ? '✔' : ''}</button><span class="pri ${x.priority}">${x.priority}</span><span class="tt">${esc(x.title)}${x.linkedId ? ` <span class="link" data-edit="${esc(x.linkedId)}">${esc(x.linkedId)}</span>` : ''}${x.reminder ? ` <span class="muted small">⏰ ${esc(x.reminder)}</span>` : ''}</span><input type="date" value="${x.date}" data-tmove="${x.id}" title="Move to another day"><button class="icon-btn" data-tmovenext="${x.id}" title="Move to next day">⏭</button><button class="icon-btn" data-tdel="${x.id}" title="Delete" aria-label="Delete task">🗑</button></div>`).join('') || '<p class="muted">No personal tasks for this day.</p>'}</div>`)}
+        <div class="tlist">${tasks.map((x) => `<div class="trow ${x.status === 'Completed' ? 'done' : ''}"><button class="chk" data-tdone="${x.id}" aria-label="Toggle task">${x.status === 'Completed' ? '✔' : ''}</button><span class="pri ${x.priority}">${x.priority}</span><span class="tt">${esc(x.title)}${x.linkedId ? ` <span class="link" data-edit="${esc(x.linkedId)}">${esc(x.linkedId)}</span>` : ''}${x.reminder ? ` <span class="muted small">⏰ ${esc(x.reminder)}</span>` : ''}${x.carriedFrom && x.status !== 'Completed' ? ` <span class="chip flag due" title="Not finished on ${UI.fmt(x.carriedFrom)} – carried forward automatically">↪ from ${UI.fmt(x.carriedFrom)}</span>` : ''}</span><input type="date" value="${x.date}" data-tmove="${x.id}" title="Move to another day"><button class="icon-btn" data-tmovenext="${x.id}" title="Move to next day">⏭</button><button class="icon-btn" data-tdel="${x.id}" title="Delete" aria-label="Delete task">🗑</button></div>`).join('') || '<p class="muted">No personal tasks for this day.</p>'}</div>`)}
       ${card('Upcoming deadlines & priorities', `<h4>Previous days' pending (${prevPending.length})</h4>${list(prevPending, 'Nothing pending from earlier days. 🎉', 6)}<h4>High priority (${high.length})</h4>${list(high, 'No high-priority items. Set priority in the asset editor.', 6)}<h4>Due within 3 days (${upcoming.length})</h4>${list(upcoming, 'No deadlines in the next 3 days.', 6)}`)}</div>
       <div class="grid g-2">${card(`Completed on this day (${doneToday.length})`, list(doneToday, 'Nothing completed yet on this day.', 10))}${card('Personal notes', `<form id="note-quick" class="task-add"><input name="text" placeholder="Quick note…" required><button class="btn">Save</button></form>${notes.map((n) => `<div class="note-mini"><b>${esc(n.title || UI.fmt(n.date))}</b> ${esc(n.text).slice(0, 140)}</div>`).join('') || '<p class="muted">No notes yet.</p>'}<button class="link" data-route="notes">Open all notes →</button>`)}</div>
       <datalist id="ids-dl">${st.assets.filter((a) => !D.isDone(a)).slice(0, 400).map((a) => `<option value="${a.id}">`).join('')}</datalist>`;
@@ -130,6 +191,22 @@
     el.querySelector('[data-today]').onclick = () => setDate(S.today());
     el.querySelector('[data-summary]').onclick = () => root.MAHI_APP.dailySummary(true);
     el.querySelector('#task-add').onsubmit = (e) => { e.preventDefault(); const f = new FormData(e.target); S.addCustomTask({ title: f.get('title'), priority: f.get('priority'), reminder: f.get('reminder'), linkedId: f.get('linkedId'), date: t }); };
+    const mrText = el.querySelector('#mr-text');
+    mrText.oninput = () => { myDayState.reportDraft = mrText.value; };
+    el.querySelector('#mr-form').onsubmit = (e) => { e.preventDefault(); const text = mrText.value.trim(); myDayState.reportDraft = text; myDayState.report = { text, plan: R.plan(R.parse(text)) }; P.myday(el); };
+    const mrSave = el.querySelector('[data-mr-save]');
+    if (mrSave) mrSave.onclick = () => {
+      const chosen = [...el.querySelectorAll('[data-mr-id]')].filter((c) => c.checked).map((c) => c.dataset.mrId);
+      const res = R.apply(rp.plan, chosen);
+      myDayState.report = null; myDayState.reportDraft = '';
+      root.MAHI_APP.reportResult(res);
+      P.myday(el);
+    };
+    const mrCancel = el.querySelector('[data-mr-cancel]');
+    if (mrCancel) mrCancel.onclick = () => { myDayState.report = null; P.myday(el); };
+    el.querySelectorAll('[data-mr-undo]').forEach((b) => b.onclick = async () => {
+      if (await UI.confirm('Undo this report?', 'The deliverables it completed go back to their earlier status, and its personal tasks are removed.', 'Undo report', true)) { R.undo(b.dataset.mrUndo); UI.toast('Report undone'); }
+    });
     el.querySelector('#note-quick').onsubmit = (e) => { e.preventDefault(); S.addNote({ text: new FormData(e.target).get('text'), title: 'Quick note' }); UI.toast('Note saved'); };
     el.onclick = (e) => {
       const x = e.target;
@@ -346,10 +423,10 @@
   P.brands = (el) => {
     const m = S.metrics();
     const rows = D.BRANDS.map((b, i) => { const x = m.byBrand[b.name]; return `<tr><td>${i + 1}</td><td><b>${esc(b.name)}</b></td><td>${b.posters}</td><td>${b.ai}</td><td>${b.vj}</td><td>${b.posters + b.ai + b.vj}</td><td>${b.vjMember ? esc(UI.vjName(b.vjMember)) : '—'}</td>${D.SETS.map((s) => { const y = m.byBrandSet[s.code + '|' + b.name]; return `<td class="heat" style="--p:${y.pct}" data-route="production?set=${s.code}&brand=${encodeURIComponent(b.name)}" title="${s.label}: ${y.done}/${y.target}">${y.done}/${y.target}</td>`; }).join('')}<td>${x.done}/${x.target}</td><td>${CH.progress(x.pct, '#2E9E4F', UI.pct(x.pct))}</td></tr>`; }).join('');
-    el.innerHTML = `<div class="page-h"><div><h2>Brand Management</h2><div class="muted">Confirmed baseline: 15 brands × 7 sets = 105 brand-set records · 88 deliverables per set</div></div></div>
+    el.innerHTML = `<div class="page-h"><div><h2>Brand Management</h2><div class="muted">Confirmed baseline: ${D.BRANDS.length} brands × ${D.SETS.length} sets = ${D.BRANDS.length * D.SETS.length} brand-set records · 88 deliverables per set</div></div></div>
       <section class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>Brand</th><th>Posters/set</th><th>AI/set</th><th>VJ/set</th><th>Total/set</th><th>Assigned VJ</th>${D.SETS.map((s) => `<th>${s.label}</th>`).join('')}<th>All sets</th><th>Progress</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td></td><td>TOTAL</td><td>62</td><td>14</td><td>12</td><td>88</td><td></td>${D.SETS.map((s) => `<td>${m.bySet[s.code].done}/${m.bySet[s.code].target}</td>`).join('')}<td>${m.done}/${m.total}</td><td></td></tr></tfoot></table></div></section>
       ${card('Brand-wise production comparison', CH.hbars(D.BRANDS.map((b) => ({ label: b.name, values: [m.byBrand[b.name].done, m.byBrand[b.name].pending], click: 'production?brand=' + encodeURIComponent(b.name) })), [{ name: 'Completed', color: '#2E9E4F' }, { name: 'Pending', color: '#C9CFD6' }]))}
-      ${card('New brands (expansion – separate from the confirmed 616 baseline)', `<form id="nb" class="task-add"><input name="name" placeholder="Brand name" required><input name="services" placeholder="Services / content types"><input name="notes" placeholder="Notes"><button class="btn">Add brand</button></form><div class="tlist">${S.state.extraBrands.map((b) => `<div class="trow"><b>${esc(b.name)}</b><span class="muted small">${esc(b.services)} ${esc(b.notes)}</span><span class="muted small">added ${UI.fmt(b.added)}</span><button class="icon-btn" data-delb="${b.id}" aria-label="Delete">🗑</button></div>`).join('') || '<p class="muted">No extra brands yet. Plan their targets in Annual Workflow.</p>'}</div>`)}`;
+      ${card('New brands (expansion – separate from the confirmed baseline)', `<form id="nb" class="task-add"><input name="name" placeholder="Brand name" required><input name="services" placeholder="Services / content types"><input name="notes" placeholder="Notes"><button class="btn">Add brand</button></form><div class="tlist">${S.state.extraBrands.map((b) => `<div class="trow"><b>${esc(b.name)}</b><span class="muted small">${esc(b.services)} ${esc(b.notes)}</span><span class="muted small">added ${UI.fmt(b.added)}</span><button class="icon-btn" data-delb="${b.id}" aria-label="Delete">🗑</button></div>`).join('') || '<p class="muted">No extra brands yet. Plan their targets in Annual Workflow.</p>'}</div>`)}`;
     el.querySelector('#nb').onsubmit = (e) => { e.preventDefault(); const f = new FormData(e.target); S.addExtraBrand({ name: f.get('name'), services: f.get('services'), notes: f.get('notes') }); UI.toast('Brand added'); };
     el.querySelectorAll('[data-delb]').forEach((b) => b.onclick = async () => { if (await UI.confirm('Delete brand', 'Remove this expansion brand?', 'Delete', true)) S.deleteExtraBrand(b.dataset.delb); });
   };

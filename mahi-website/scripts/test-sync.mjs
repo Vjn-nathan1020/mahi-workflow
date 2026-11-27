@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = (f) => fs.readFileSync(path.join(here, '../src/legacy', f), 'utf8');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Wait until a condition holds (or time out) instead of guessing a fixed delay: the sync chain is
+// save delay + push debounce + realtime pull debounce, which runs slower on a busy machine.
+const until = async (fn, ms = 6000) => { const end = Date.now() + ms; while (Date.now() < end) { if (fn()) return true; await sleep(50); } return fn(); };
 
 // ---- in-memory table mahi_docs keyed by user ----
 const table = new Map(); const subs = []; let writes = 0, maxRow = 0;
@@ -41,7 +44,7 @@ laptop.S.updateAssets(['S01-VALLUVAM-P01', 'S01-VALLUVAM-AI01'], { status: 'Comp
 laptop.S.addNote({ title: 'Laptop note', text: 'hello' });
 await sleep(300);
 await laptop.start(); await sleep(50);
-check('First sign-in uploads existing browser data', [...table.keys()].filter((k) => k.startsWith('nathan|')).length === 10 && laptop.Y.status === 'synced', laptop.Y.status);
+check('First sign-in uploads existing browser data', [...table.keys()].filter((k) => k.startsWith('nathan|')).length === 8 && laptop.Y.status === 'synced', laptop.Y.status);
 check('Browser cache is per user', Object.keys(laptop.ls).includes('mahi.state.nathan'));
 
 const phone = device('nathan');
@@ -49,11 +52,11 @@ await phone.start(); await sleep(50);
 check('Second device loads the cloud copy', phone.S.state.assets.filter(phone.D.isDone).length === 2 && phone.S.state.notes[0]?.title === 'Laptop note');
 
 phone.S.updateAssets(['S02-PALMCAFE-VJ01'], { status: 'Approved' });
-await sleep(2300);
+await until(() => laptop.S.asset('S02-PALMCAFE-VJ01').status === 'Approved');
 check('Change on phone reaches laptop live', laptop.S.asset('S02-PALMCAFE-VJ01').status === 'Approved');
 
 laptop.S.setSettings({ vjs: laptop.S.state.settings.vjs.map((v, i) => (i === 1 ? { ...v, name: 'Priya' } : v)) });
-await sleep(2300);
+await until(() => phone.S.state.settings.vjs[1].name === 'Priya');
 check('Settings sync (VJ rename)', phone.S.state.settings.vjs[1].name === 'Priya');
 
 const w0 = writes; await sleep(3000);
@@ -65,7 +68,7 @@ check('Another account never sees Nathan\'s data', other.S.state.assets.filter(o
 
 laptop.S.updateAssets(laptop.S.state.assets.map((a) => a.id), { status: 'Completed', remarks: 'Final export checked' });
 await sleep(4800);
-check('All 616 complete syncs to the phone', phone.S.state.assets.filter(phone.D.isDone).length === 616, `largest row ${Math.round(maxRow / 1024)} KB`);
+check('All 440 complete syncs to the phone', phone.S.state.assets.filter(phone.D.isDone).length === 440, `largest row ${Math.round(maxRow / 1024)} KB`);
 
 const pass = results.filter(Boolean).length;
 console.log(`\n${pass}/${results.length} passed`);

@@ -16,6 +16,8 @@
   const uid = (p) => (p || 'X') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
   function migrate(s) {
+    // Saved data from the 7-set plan (schema 1, or no schema) is renumbered to the 5-set plan first.
+    if (s && Array.isArray(s.assets) && !(Number(s.schema) >= 2)) s = D.upgradeV1(s);
     const base = D.initialState();
     const out = Object.assign({}, base, s);
     out.settings = Object.assign({}, base.settings, s.settings || {});
@@ -24,32 +26,147 @@
     // make sure every confirmed asset exists exactly once (never invent / duplicate)
     const byId = {}; (s.assets || []).forEach((a) => { if (a && a.id && !byId[a.id]) byId[a.id] = a; });
     out.assets = base.assets.map((b) => (byId[b.id] ? Object.assign(D.blankAsset(), b, byId[b.id], { type: b.type, set: b.set, brand: b.brand, festival: b.festival, vj: b.vj }) : b));
-    ['customTasks', 'notes', 'notifications', 'history', 'focusSessions', 'campaigns', 'extraBrands', 'platformLogs'].forEach((k) => { if (!Array.isArray(out[k])) out[k] = []; });
+    ['customTasks', 'notes', 'notifications', 'history', 'focusSessions', 'campaigns', 'extraBrands', 'platformLogs', 'mahiReports', 'removedAssets', 'quarantine'].forEach((k) => { if (!Array.isArray(out[k])) out[k] = []; });
+    out.schema = D.SCHEMA_VERSION; delete out.planReport;
     ['achievements', 'milestones', 'alertLog'].forEach((k) => { if (!out[k] || typeof out[k] !== 'object') out[k] = {}; });
     return out;
   }
 
+  // Keys used by earlier MAHI builds. If this build's key is empty, the newest of these is adopted
+  // (copied, never deleted) so an update or a key change can never show an empty plan.
+  const LEGACY_KEYS = ['mahi.state.v1', 'mahi.state.local'];
+  // ---- 5-set plan upgrade: preview first, nothing saved until the user confirms ----
+  // Saved data from the 7-set plan is copied verbatim to "<key>.plan-v1-archive" and shown upgraded
+  // in memory only. While an upgrade is pending, save() writes nothing.
+  let pendingUpgrade = null;
+  const needsUpgrade = (p) => !!p && Array.isArray(p.assets) && !(Number(p.schema) >= 2);
+  function holdForUpgrade(parsed, raw) {
+    const report = D.upgradeV1(parsed).planReport;
+    let archiveKey = keyName() + '.plan-v1-archive';
+    try {
+      const prev = localStorage.getItem(archiveKey);
+      if (prev && prev !== raw) archiveKey += '.' + Date.now();
+      if (!prev || prev !== raw) localStorage.setItem(archiveKey, raw);
+    } catch (e) { report.archiveFailed = true; }
+    pendingUpgrade = { report, archiveKey };
+    emit('upgrade-pending', pendingUpgrade);
+  }
+  function applyUpgrade() {
+    if (!pendingUpgrade) return { ok: false, reason: 'No plan update is waiting' };
+    const p = pendingUpgrade; pendingUpgrade = null;
+    state.planUpgrade = { appliedAt: nowISO(), from: '7 sets (616 deliverables)', to: D.SETS.length + ' sets (' + D.buildAssets().length + ' deliverables)', report: p.report, archiveKey: p.archiveKey };
+    state.localChangedAt = Date.now(); save(true, { planUpgrade: true });
+    const v = verifySaved((saved) => Number(saved.schema) >= 2 && Array.isArray(saved.assets) && saved.assets.length === state.assets.length);
+    if (!v.ok) pendingUpgrade = p;
+    emit('change', { planUpgrade: true });
+    return v;
+  }
+  // Puts the archived pre-update data back as the working copy (current copy kept as ".before-archive-restore").
+  // The caller reloads the page; the update preview then appears again.
+  function restorePlanArchive(archiveKey) {
+    const k = archiveKey || keyName() + '.plan-v1-archive';
+    let raw = null; try { raw = localStorage.getItem(k); } catch (e) { return false; }
+    if (!raw) return false;
+    flush(); backupRaw('.before-archive-restore');
+    try { localStorage.setItem(keyName(), raw); return true; } catch (e) { return false; }
+  }
+  const planArchiveRaw = (k) => { try { return localStorage.getItem(k || keyName() + '.plan-v1-archive'); } catch (e) { return null; } };
+  let recovered = '';
+  let lastSavedAt = 0;
+  function workScore(s) {
+    if (!s || !Array.isArray(s.assets)) return 0;
+    return s.assets.filter((a) => a && ((a.status && a.status !== 'Not Started') || (a.pubStatus && a.pubStatus !== 'Not Scheduled'))).length
+      + (s.customTasks || []).length + (s.notes || []).length + (s.focusSessions || []).length;
+  }
+  function backupRaw(suffix) { try { const r = localStorage.getItem(keyName()); if (r) localStorage.setItem(keyName() + suffix, r); } catch (e) { /* storage full – best effort */ } }
+
   function load() {
-    let raw = null;
-    try { raw = localStorage.getItem(keyName()); } catch (e) { storageOk = false; }
-    if (raw) { try { state = migrate(JSON.parse(raw)); } catch (e) { console.warn('stored state unreadable, starting fresh', e); state = D.initialState(); } }
-    else { state = D.initialState(); state.alertLog = {}; }
+    const key = keyName();
+    let raw = null, parsed = null;
+    recovered = '';
+    try { raw = localStorage.getItem(key); } catch (e) { storageOk = false; }
+    if (raw) {
+      try { parsed = JSON.parse(raw); }
+      catch (e) {
+        // Never let a fresh plan silently overwrite data that could not be read: keep the bytes for recovery.
+        try { localStorage.setItem(key + '.corrupt.' + Date.now(), raw); } catch (e2) { /* ignore */ }
+        console.warn('MAHI: saved data unreadable – a copy was kept, starting from the plan', e);
+        recovered = 'corrupt';
+      }
+    } else {
+      let best = null;
+      let bestRaw = null;
+      LEGACY_KEYS.filter((k) => k !== key).forEach((k) => {
+        try { const r = localStorage.getItem(k); if (!r) return; const p = JSON.parse(r); if (workScore(p) > workScore(best)) { best = p; bestRaw = r; } } catch (e) { /* skip unreadable */ }
+      });
+      if (best && workScore(best) > 0) { parsed = best; raw = bestRaw; recovered = 'legacy'; }
+    }
+    pendingUpgrade = null;
+    if (needsUpgrade(parsed)) holdForUpgrade(parsed, raw || JSON.stringify(parsed));
+    state = parsed ? migrate(parsed) : Object.assign(D.initialState(), { alertLog: {} });
     index();
+    if (recovered === 'corrupt') notify('import', 'Saved data could not be read', 'A copy was kept in this browser for recovery. Restore your latest backup from Excel ▸ Backup & restore.');
+    if (recovered === 'legacy') { notify('import', 'Earlier work recovered', 'MAHI found your work saved by an earlier version and loaded it.'); save(true); }
+    rollover(false);
     return state;
   }
   let byId = {};
   function index() { byId = {}; state.assets.forEach((a) => { byId[a.id] = a; }); }
 
   function save(immediate, info) {
-    clearTimeout(saveTimer);
+    clearTimeout(saveTimer); saveTimer = null;
+    if (pendingUpgrade) { emit('save-blocked', pendingUpgrade); return; } // nothing is written before the plan update is confirmed
     const doSave = () => {
-      try { localStorage.setItem(keyName(), JSON.stringify(state)); storageOk = true; }
+      saveTimer = null;
+      try { localStorage.setItem(keyName(), JSON.stringify(state)); storageOk = true; lastSavedAt = Date.now(); }
       catch (e) { storageOk = false; emit('storage-error', e); }
       emit('saved', info || {}); // cloud sync listens here, even when browser storage is blocked
     };
-    if (immediate) doSave(); else saveTimer = setTimeout(doSave, 250);
+    if (immediate) doSave(); else { saveTimer = setTimeout(doSave, 250); emit('saving'); }
   }
+  // Write any pending change at once – called when the tab is hidden, closed or reloaded,
+  // so a change made just before closing is never lost inside the save delay.
+  function flush() { if (saveTimer && state) save(true); }
+  if (typeof root.addEventListener === 'function') { root.addEventListener('pagehide', flush); root.addEventListener('beforeunload', flush); }
+  if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   function changed(what) { state.localChangedAt = Date.now(); save(); emit('change', what || {}); }
+
+  // ---------------- new day: carry unfinished personal tasks forward ----------------
+  // Only the date of unfinished tasks moves; nothing is deleted and completed work keeps its date.
+  // Daily counters start at zero by themselves because they are calculated from completion dates.
+  function rollover(markChanged) {
+    const t = today(); let n = 0;
+    state.customTasks.forEach((x) => {
+      if (x.status !== 'Completed' && x.date && x.date < t) { if (!x.carriedFrom) x.carriedFrom = x.date; x.date = t; n++; }
+    });
+    if (n) {
+      state.history.push({ ts: nowISO(), id: 'personal-tasks', field: 'carriedForward', from: '', to: String(n) });
+      notify('reminder', `${n} unfinished task(s) carried forward`, `Moved to ${D.fmtDate(t)}. Nothing was deleted.`);
+      if (markChanged) changed({ rollover: true }); else save(true);
+    }
+    return n;
+  }
+
+  // ---------------- performance history (never reset) ----------------
+  // Built from the permanent completion dates of deliverables and personal tasks, in IST.
+  function completedItems() {
+    const items = [];
+    state.assets.forEach((a) => { if (D.isDone(a)) items.push({ d: a.completionDate || '', kind: 'deliverable', type: a.type }); });
+    state.customTasks.forEach((x) => { if (x.status === 'Completed') items.push({ d: x.completedOn || (x.completedAt ? D.localISO(new Date(x.completedAt)) : x.date || ''), kind: 'task' }); });
+    return items;
+  }
+  function performance(at) {
+    const t = at || today();
+    const items = completedItems();
+    const count = (l) => ({ total: l.length, deliverables: l.filter((i) => i.kind === 'deliverable').length, tasks: l.filter((i) => i.kind === 'task').length });
+    const range = (from, to) => count(items.filter((i) => i.d && i.d >= from && i.d <= (to || t)));
+    const y = D.addDays(t, -1);
+    return {
+      today: t, weekStart: D.weekStart(t),
+      day: range(t), yesterday: range(y, y), week: range(D.weekStart(t)), month: range(t.slice(0, 7) + '-01'), year: range(t.slice(0, 4) + '-01-01'),
+      all: count(items),
+    };
+  }
 
   // ---------------- metrics ----------------
   function pct(a, b) { return b ? a / b : 0; }
@@ -139,9 +256,11 @@
       if (a.status === 'Correction Required' && oldStatus !== 'Correction Required') corrections.push(a);
       if (a.pubStatus === 'Published' && oldPub !== 'Published') published.push(a);
     });
-    if (!opts.silent) react(before, completed, corrections, published);
+    // opts.defer: build MAHI's reactions but hand them back instead of showing them, so the caller can
+    // show success only after the save is verified (Report to MAHI / chat).
+    const reactions = opts.silent ? [] : react(before, completed, corrections, published, !!opts.defer);
     changed({ assets: ids });
-    return { completed, corrections, published };
+    return { completed, corrections, published, reactions };
   }
 
   function snapshotProgress() {
@@ -149,7 +268,7 @@
     return { done, sets: group(state.assets, (a) => a.set), brandSets: group(state.assets, (a) => a.set + '|' + a.brand), fest: group(state.assets, (a) => a.festival) };
   }
 
-  function react(before, completed, corrections, published) {
+  function react(before, completed, corrections, published, defer) {
     const after = snapshotProgress();
     const R = [];
     const name = state.settings.callName || 'Nathan';
@@ -228,7 +347,22 @@
     else if (unlocked.length > 1) R.push({ kind: 'achievement', priority: 0.5, msg: `${unlocked.length} achievements unlocked, ${name}!`, detail: unlocked.map((a) => a.icon + ' ' + a.name).join(' · ') });
     // daily target
     checkDailyDone(R);
-    if (R.length) emit('reactions', R.sort((x, y) => y.priority - x.priority));
+    R.sort((x, y) => y.priority - x.priority);
+    if (R.length && !defer) emit('reactions', R);
+    return R;
+  }
+
+  // Read the saved browser copy back and confirm it holds what was just changed.
+  // check(savedState) → true when the saved data contains the change. Never trusts memory alone.
+  function verifySaved(check) {
+    flush();
+    if (!storageOk) return { ok: false, reason: 'Browser storage is full or blocked' };
+    try {
+      const raw = localStorage.getItem(keyName());
+      if (!raw) return { ok: false, reason: 'Nothing was written to browser storage' };
+      const saved = JSON.parse(raw);
+      return check(saved) ? { ok: true } : { ok: false, reason: 'The saved copy does not contain the change' };
+    } catch (e) { return { ok: false, reason: 'Could not read the saved copy back (' + (e && e.message) + ')' }; }
   }
   function summarizeTypes(list) {
     const c = {}; list.forEach((a) => { c[a.type] = (c[a.type] || 0) + 1; });
@@ -252,6 +386,7 @@
 
   // Deadline monitoring – runs on load and every minute while the app is open (not in the background).
   function deadlineScan(force) {
+    rollover(true); // the app may stay open across midnight (IST)
     const m = metrics();
     const t = today(); const out = [];
     state.alertLog = state.alertLog || {};
@@ -266,8 +401,7 @@
       state.alertLog['due:' + t] = true;
       const g = {}; m.dueSoon.forEach((a) => { const k = a.set + '|' + a.brand; g[k] = (g[k] || 0) + 1; });
       const first = m.dueSoon.slice().sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
-      const [yy, mm, dd] = first.deadline.split('-').map(Number);
-      const hrs = Math.max(0, Math.round((new Date(yy, mm - 1, dd + 1).getTime() - Date.now()) / 3600000));
+      const hrs = Math.max(0, Math.round((D.istEndOfDay(first.deadline) - Date.now()) / 3600000));
       const brands = [...new Set(m.dueSoon.map((a) => a.brand))];
       const sets = [...new Set(m.dueSoon.map((a) => D.setByCode(a.set).label))];
       notify('deadline', `${m.dueSoon.length} assignment(s) approaching deadline`, `${sets.join(', ')} · earliest deadline ${D.fmtDate(first.deadline)} · ${hrs}h remaining · ${brands.length} brand(s)`);
@@ -281,8 +415,8 @@
     // custom task reminders
     state.customTasks.forEach((ct) => {
       if (ct.status !== 'Completed' && ct.date === t && ct.reminder && !state.alertLog['rem:' + ct.id + t]) {
-        const [h, mi] = ct.reminder.split(':').map(Number); const nd = new Date();
-        if (nd.getHours() > h || (nd.getHours() === h && nd.getMinutes() >= mi)) { state.alertLog['rem:' + ct.id + t] = true; notify('reminder', 'Reminder', ct.title); out.push({ kind: 'reminder', priority: 4, msg: `${name}, reminder: ${ct.title}`, detail: ct.notes || '' }); }
+        const [h, mi] = ct.reminder.split(':').map(Number); const [nh, nm] = D.istHM(new Date());
+        if (nh > h || (nh === h && nm >= mi)) { state.alertLog['rem:' + ct.id + t] = true; notify('reminder', 'Reminder', ct.title); out.push({ kind: 'reminder', priority: 4, msg: `${name}, reminder: ${ct.title}`, detail: ct.notes || '' }); }
       }
     });
     if (out.length) { save(); emit('reactions', out); }
@@ -293,11 +427,14 @@
   // ---------------- other mutations ----------------
   function setSettings(patch) { Object.assign(state.settings, patch); changed({ settings: true }); }
   function addCustomTask(t) { const x = Object.assign({ id: uid('T'), title: '', category: 'Production', priority: 'Medium', date: today(), reminder: '', status: 'Pending', linkedId: '', notes: '' }, t); state.customTasks.push(x); changed(); return x; }
-  function updateCustomTask(id, patch) {
-    const t = state.customTasks.find((x) => x.id === id); if (!t) return;
+  function updateCustomTask(id, patch, opts) {
+    const t = state.customTasks.find((x) => x.id === id); if (!t) return [];
     const was = t.status; Object.assign(t, patch);
-    if (was !== 'Completed' && t.status === 'Completed') { t.completedAt = nowISO(); const R = [{ kind: 'custom', priority: 1, msg: `Nice, ${state.settings.callName}! "${t.title}" is done.`, detail: 'Personal task (not counted in the 616 festival target)' }]; checkDailyDone(R); emit('reactions', R); }
+    let R = [];
+    if (was === 'Completed' && t.status !== 'Completed') { t.completedAt = ''; t.completedOn = ''; }
+    if (was !== 'Completed' && t.status === 'Completed') { t.completedAt = nowISO(); t.completedOn = today(); R = [{ kind: 'custom', priority: 1, msg: `Nice, ${state.settings.callName}! "${t.title}" is done.`, detail: 'Personal task (not counted in the 616 festival target)' }]; checkDailyDone(R); if (!(opts && opts.defer)) emit('reactions', R); }
     changed();
+    return R;
   }
   function deleteCustomTask(id) { state.customTasks = state.customTasks.filter((x) => x.id !== id); changed(); }
   function addNote(n) { const x = Object.assign({ id: uid('N'), date: today(), title: '', category: 'Personal', text: '', linkedId: '', pinned: false }, n); state.notes.unshift(x); changed(); return x; }
@@ -313,11 +450,22 @@
   function addExtraBrand(b) { state.extraBrands.push(Object.assign({ id: uid('B'), name: '', services: '', notes: '', added: today() }, b)); changed(); }
   function deleteExtraBrand(id) { state.extraBrands = state.extraBrands.filter((x) => x.id !== id); changed(); }
 
-  function replaceAll(newState, info) { state = migrate(newState); if (!(info && info.fromSync)) state.localChangedAt = Date.now(); index(); save(true, info); emit('change', { replaced: true }); }
-  function resetAll() { try { localStorage.removeItem(keyName()); } catch (e) { /* ignore */ } state = D.initialState(); state.alertLog = {}; state.localChangedAt = Date.now(); index(); save(true); emit('change', { replaced: true }); }
+  // Whole-state replacement (backup restore, Excel import, cloud copy). The previous browser copy is kept
+  // under "<key>.before-…" whenever it holds work that would otherwise be lost.
+  function replaceAll(newState, info) {
+    const fromSync = !!(info && info.fromSync);
+    const unsynced = (state.localChangedAt || 0) > (state.syncedAt || 0);
+    if (!fromSync || unsynced) { flush(); backupRaw(fromSync ? '.before-cloud' : '.before-replace'); }
+    if (needsUpgrade(newState)) holdForUpgrade(newState, JSON.stringify(newState));
+    state = migrate(newState); if (!fromSync) state.localChangedAt = Date.now(); index(); save(true, info);
+    rollover(false);
+    emit('change', { replaced: true });
+  }
+  function resetAll() { flush(); backupRaw('.before-reset'); try { localStorage.removeItem(keyName()); } catch (e) { /* ignore */ } state = D.initialState(); state.alertLog = {}; state.localChangedAt = Date.now(); index(); save(true); emit('change', { replaced: true }); }
 
   root.MAHI_STORE = {
-    on, emit, load, save, get state() { return state; }, get storageOk() { return storageOk; }, asset: (id) => byId[id], metrics, currentSet,
+    on, emit, load, save, flush, rollover, performance, verifySaved, get state() { return state; }, get storageOk() { return storageOk; },
+    get lastSavedAt() { return lastSavedAt; }, get pendingUpgrade() { return pendingUpgrade; }, applyUpgrade, restorePlanArchive, planArchiveRaw, get pendingSave() { return !!saveTimer; }, get recovered() { return recovered; }, asset: (id) => byId[id], metrics, currentSet,
     updateAssets, setSettings, addCustomTask, updateCustomTask, deleteCustomTask, addNote, updateNote, deleteNote, markRead, notify,
     addCampaign, updateCampaign, deleteCampaign, addPlatformLog, deletePlatformLog, addFocusSession, addExtraBrand, deleteExtraBrand,
     deadlineScan, checkDailyDone, replaceAll, resetAll, migrate, vjName, uid, today, changed,

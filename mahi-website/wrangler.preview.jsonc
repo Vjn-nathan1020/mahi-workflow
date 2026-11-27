@@ -1,0 +1,8 @@
+// ISOLATED PREVIEW of MAHI V2 on Cloudflare Workers (static assets only, no server code).
+// Deploys to a NEW worker name, so the production site mahi-workflow.nathan1020v.workers.dev is not touched.
+// Deploy:  npm run build  &&  npx wrangler deploy --config wrangler.preview.jsonc
+{
+  "name": "mahi-workflow-preview",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./dist", "not_found_handling": "single-page-application" }
+}
